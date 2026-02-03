@@ -1,0 +1,48 @@
+{% extends "admin/base_site.html" %}
+{% load i18n %}
+
+{% block title %}{{ title }} | {{ site_title }}{% endblock %}
+
+{% block breadcrumbs %}
+<div class="breadcrumbs">
+    <a href="{% url 'admin:index' %}">{% translate "Home" %}</a>
+    &rsaquo; <a href="{% url 'admin:dolt_commits' %}">{% translate "Dolt Commits" %}</a>
+    &rsaquo; {{ title }}
+</div>
+{% endblock %}
+
+{% block content %}
+<div id="content-main">
+    <h2>{% translate "Pull from Remote" %}</h2>
+
+    <p>{% translate "Current branch:" %} <code>{{ current_branch }}</code></p>
+
+    <form method="post" action="">
+        {% csrf_token %}
+
+        <div class="form-row">
+            <label for="id_remote">{% translate "Remote:" %}</label>
+            <select name="remote" id="id_remote">
+                {% for remote in remotes %}
+                    <option value="{{ remote.name }}" {% if remote.name == 'origin' %}selected{% endif %}>
+                        {{ remote.name }} ({{ remote.url }})
+                    </option>
+                {% empty %}
+                    <option value="origin">origin</option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <div class="form-row">
+            <label for="id_branch">{% translate "Branch:" %}</label>
+            <input type="text" name="branch" id="id_branch" value="{{ current_branch }}"
+                   placeholder="{% translate 'Leave empty for current branch' %}">
+        </div>
+
+        <div class="submit-row">
+            <input type="submit" value="{% translate 'Pull' %}" class="default">
+            <a href="{% url 'admin:dolt_commits' %}" class="button cancel-link">{% translate "Cancel" %}</a>
+        </div>
+    </form>
+</div>
+{% endblock %}

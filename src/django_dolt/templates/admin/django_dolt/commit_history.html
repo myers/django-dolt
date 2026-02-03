@@ -1,0 +1,106 @@
+{% extends "admin/base_site.html" %}
+{% load i18n %}
+
+{% block title %}{{ title }} | {{ site_title }}{% endblock %}
+
+{% block breadcrumbs %}
+<div class="breadcrumbs">
+    <a href="{% url 'admin:index' %}">{% translate "Home" %}</a>
+    &rsaquo; {{ title }}
+</div>
+{% endblock %}
+
+{% block content %}
+<div id="content-main">
+    <h2>Branch: <code>{{ current_branch }}</code></h2>
+
+    {% if status %}
+    <div class="module">
+        <h3>{% translate "Working Directory Status" %}</h3>
+        <table>
+            <thead>
+                <tr>
+                    <th>{% translate "Table" %}</th>
+                    <th>{% translate "Status" %}</th>
+                    <th>{% translate "Staged" %}</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in status %}
+                <tr class="{% cycle 'row1' 'row2' %}">
+                    <td>{{ item.table }}</td>
+                    <td>
+                        {% if 'new' in item.status %}
+                            <span style="color: green;">{{ item.status }}</span>
+                        {% elif 'modified' in item.status %}
+                            <span style="color: orange;">{{ item.status }}</span>
+                        {% else %}
+                            {{ item.status }}
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if item.staged %}
+                            <span style="color: green;">&#10003;</span>
+                        {% else %}
+                            <span style="color: gray;">-</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <p class="quiet">{% translate "No uncommitted changes" %}</p>
+    {% endif %}
+
+    {% if ignored_patterns %}
+    <p class="help">
+        {% translate "Ignored patterns:" %} <code>{{ ignored_patterns|join:", " }}</code>
+    </p>
+    {% endif %}
+
+    <div style="margin: 20px 0;">
+        <a href="{% url 'admin:dolt_pull' %}" class="button">{% translate "Pull from Remote" %}</a>
+    </div>
+
+    <h2>{% translate "Commit History" %}</h2>
+
+    {% if commits %}
+    <div class="module">
+        <table>
+            <thead>
+                <tr>
+                    <th>{% translate "Commit" %}</th>
+                    <th>{% translate "Date" %}</th>
+                    <th>{% translate "Author" %}</th>
+                    <th>{% translate "Message" %}</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for commit in commits %}
+                <tr class="{% cycle 'row1' 'row2' %}">
+                    <td>
+                        <code title="{{ commit.full_hash }}">{{ commit.hash }}</code>
+                    </td>
+                    <td>{{ commit.date|date:"Y-m-d H:i:s" }}</td>
+                    <td>{{ commit.author }}</td>
+                    <td>
+                        {% for line in commit.message_lines %}
+                            {% if forloop.first %}
+                                <strong>{{ line }}</strong>
+                            {% else %}
+                                <br><span class="quiet">{{ line }}</span>
+                            {% endif %}
+                        {% endfor %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <p class="quiet">{% translate "No commits found." %}</p>
+    {% endif %}
+</div>
+{% endblock %}
