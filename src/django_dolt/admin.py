@@ -1,12 +1,13 @@
 """
 Django admin integration for Dolt version control.
 
-Provides an extended admin site with Dolt commit history and pull functionality.
+Provides an extended admin site with Dolt commit history and pull functionality,
+plus read-only ModelAdmin classes for Dolt system tables.
 """
 
 from __future__ import annotations
 
-from typing import cast
+from typing import Any, cast
 
 from django.contrib import admin, messages
 from django.http import HttpRequest, HttpResponse, HttpResponseRedirect
@@ -14,6 +15,7 @@ from django.template.response import TemplateResponse
 from django.urls import URLPattern, path, reverse
 
 from django_dolt import services
+from django_dolt.models import Branch, Commit, Remote
 
 
 class DoltAdminMixin:
@@ -214,3 +216,68 @@ def get_dolt_admin_urls(admin_site: admin.AdminSite) -> list[URLPattern]:
             name="dolt_pull",
         ),
     ]
+
+
+# -----------------------------------------------------------------------------
+# Read-only ModelAdmin classes for Dolt system tables
+# -----------------------------------------------------------------------------
+
+
+class ReadOnlyModelAdmin(admin.ModelAdmin):  # type: ignore[type-arg]
+    """Base class for read-only model admins."""
+
+    def has_add_permission(self, request: HttpRequest) -> bool:
+        return False
+
+    def has_change_permission(
+        self, request: HttpRequest, obj: Any = None
+    ) -> bool:
+        return False
+
+    def has_delete_permission(
+        self, request: HttpRequest, obj: Any = None
+    ) -> bool:
+        return False
+
+
+@admin.register(Branch)
+class BranchAdmin(ReadOnlyModelAdmin):
+    """Admin for viewing Dolt branches."""
+
+    list_display = ["name", "hash_short", "latest_committer", "latest_commit_date"]
+    search_fields = ["name", "latest_committer"]
+    ordering = ["name"]
+
+    @admin.display(description="Hash")
+    def hash_short(self, obj: Branch) -> str:
+        return obj.hash[:8]
+
+
+@admin.register(Commit)
+class CommitAdmin(ReadOnlyModelAdmin):
+    """Admin for viewing Dolt commit history."""
+
+    list_display = ["hash_short", "committer", "date", "message_preview"]
+    list_filter = ["committer"]
+    search_fields = ["commit_hash", "committer", "message"]
+    ordering = ["-date"]
+    list_per_page = 50
+
+    @admin.display(description="Hash")
+    def hash_short(self, obj: Commit) -> str:
+        return obj.commit_hash[:8]
+
+    @admin.display(description="Message")
+    def message_preview(self, obj: Commit) -> str:
+        if len(obj.message) > 60:
+            return obj.message[:60] + "..."
+        return obj.message
+
+
+@admin.register(Remote)
+class RemoteAdmin(ReadOnlyModelAdmin):
+    """Admin for viewing Dolt remotes."""
+
+    list_display = ["name", "url"]
+    search_fields = ["name", "url"]
+    ordering = ["name"]

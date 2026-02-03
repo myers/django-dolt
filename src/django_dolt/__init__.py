@@ -1,5 +1,9 @@
 """Django integration for Dolt version-controlled databases."""
 
+from __future__ import annotations
+
+from typing import Any
+
 from django_dolt.services import (
     DoltCommitError,
     DoltError,
@@ -20,6 +24,10 @@ from django_dolt.services import (
 
 __version__ = "0.1.0"
 __all__ = [
+    # Models (lazy-loaded)
+    "Branch",
+    "Commit",
+    "Remote",
     # Exceptions
     "DoltError",
     "DoltCommitError",
@@ -40,5 +48,14 @@ __all__ = [
     # Utilities
     "get_ignored_tables",
 ]
+
+
+def __getattr__(name: str) -> Any:
+    """Lazy import for models to avoid AppRegistryNotReady errors."""
+    if name in ("Branch", "Commit", "Remote"):
+        from django.apps import apps
+
+        return apps.get_model("django_dolt", name)
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 default_app_config = "django_dolt.apps.DjangoDoltConfig"
