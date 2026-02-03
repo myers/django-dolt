@@ -117,7 +117,87 @@ class DoltAdminMixin:
         return TemplateResponse(request, "admin/django_dolt/pull.html", context)
 
 
-class DoltAdminSite(DoltAdminMixin, admin.AdminSite):  # type: ignore[misc]
+class DoltMultiDBAdminMixin:
+    """Mixin to reorganize Dolt models by database in the admin sidebar.
+
+    Instead of showing:
+        DOLT VERSION CONTROL
+        - Branches (Inventory Db)
+        - Branches (Orders Db)
+        - Commits (Inventory Db)
+        ...
+
+    This shows:
+        INVENTORY DB (DOLT)
+        - Branches
+        - Commits
+        - Remotes
+
+        ORDERS DB (DOLT)
+        - Branches
+        - Commits
+        - Remotes
+    """
+
+    def get_app_list(self, request: HttpRequest, app_label: str | None = None) -> list[dict[str, Any]]:
+        """Reorganize Dolt models by database."""
+        app_list = super().get_app_list(request, app_label)  # type: ignore[misc]
+
+        # Find the django_dolt app
+        dolt_app = None
+        other_apps = []
+        for app in app_list:
+            if app.get("app_label") == "django_dolt":
+                dolt_app = app
+            else:
+                other_apps.append(app)
+
+        if not dolt_app or not dolt_app.get("models"):
+            return app_list
+
+        # Group models by database
+        db_groups: dict[str, list[dict[str, Any]]] = {}
+        for model in dolt_app["models"]:
+            # Model names are like "Branch_inventory_db", "Commit_orders_db"
+            name = model.get("object_name", "")
+            parts = name.split("_", 1)
+            if len(parts) == 2:
+                model_type, db_suffix = parts
+                # Convert db_suffix to display name (e.g., "inventory_db" -> "Inventory Db")
+                db_display = db_suffix.replace("_", " ").title()
+
+                if db_suffix not in db_groups:
+                    db_groups[db_suffix] = []
+
+                # Create a cleaned model entry with simple name
+                cleaned_model = model.copy()
+                cleaned_model["name"] = model_type + "s" if not model_type.endswith("s") else model_type + "es"
+                # Use verbose_name_plural if available
+                if "Branches" in str(model.get("name", "")):
+                    cleaned_model["name"] = "Branches"
+                elif "Commits" in str(model.get("name", "")):
+                    cleaned_model["name"] = "Commits"
+                elif "Remotes" in str(model.get("name", "")):
+                    cleaned_model["name"] = "Remotes"
+
+                db_groups[db_suffix].append(cleaned_model)
+
+        # Create separate app entries for each database
+        dolt_apps = []
+        for db_suffix, models in sorted(db_groups.items()):
+            db_display = db_suffix.replace("_", " ").title()
+            dolt_apps.append({
+                "name": f"{db_display} (Dolt)",
+                "app_label": f"django_dolt_{db_suffix}",
+                "app_url": dolt_app.get("app_url", ""),
+                "has_module_perms": dolt_app.get("has_module_perms", True),
+                "models": sorted(models, key=lambda m: m.get("name", "")),
+            })
+
+        return other_apps + dolt_apps
+
+
+class DoltAdminSite(DoltMultiDBAdminMixin, DoltAdminMixin, admin.AdminSite):  # type: ignore[misc]
     """Extended admin site with Dolt version control integration."""
 
     site_header = "Django Administration (Dolt)"
@@ -240,7 +320,6 @@ class ReadOnlyModelAdmin(admin.ModelAdmin):  # type: ignore[type-arg]
         return False
 
 
-@admin.register(Branch)
 class BranchAdmin(ReadOnlyModelAdmin):
     """Admin for viewing Dolt branches."""
 
@@ -253,7 +332,6 @@ class BranchAdmin(ReadOnlyModelAdmin):
         return obj.hash[:8]
 
 
-@admin.register(Commit)
 class CommitAdmin(ReadOnlyModelAdmin):
     """Admin for viewing Dolt commit history."""
 
@@ -274,10 +352,171 @@ class CommitAdmin(ReadOnlyModelAdmin):
         return obj.message
 
 
-@admin.register(Remote)
 class RemoteAdmin(ReadOnlyModelAdmin):
     """Admin for viewing Dolt remotes."""
 
     list_display = ["name", "url"]
     search_fields = ["name", "url"]
     ordering = ["name"]
+
+
+def register_default_dolt_admin() -> None:
+    """Register Dolt admin for the default database.
+
+    Only call this if your default database is a Dolt database.
+    For multi-database setups, use register_dolt_admin() instead.
+    """
+    admin.site.register(Branch, BranchAdmin)
+    admin.site.register(Commit, CommitAdmin)
+    admin.site.register(Remote, RemoteAdmin)
+
+
+# -----------------------------------------------------------------------------
+# Dynamic admin registration for multi-database support
+# -----------------------------------------------------------------------------
+
+
+def register_dolt_admin(db_alias: str) -> None:
+    """Register admin classes for a specific Dolt database.
+
+    Creates and registers ModelAdmin classes for the database-specific
+    proxy models. Each database gets its own set of admin entries.
+
+    Args:
+        db_alias: Database alias from Django settings.
+    """
+    from django_dolt.models import create_proxy_models
+
+    BranchProxy, CommitProxy, RemoteProxy = create_proxy_models(db_alias)
+
+    class DynamicBranchAdmin(ReadOnlyModelAdmin):
+        """Admin for viewing Dolt branches for a specific database."""
+
+        list_display = ["name", "hash_short", "latest_committer", "latest_commit_date"]
+        search_fields = ["name", "latest_committer"]
+        ordering = ["name"]
+
+        @admin.display(description="Hash")
+        def hash_short(self, obj: Branch) -> str:
+            return obj.hash[:8]
+
+        def get_queryset(self, request: HttpRequest) -> Any:
+            return super().get_queryset(request).using(db_alias)
+
+    class DynamicCommitAdmin(ReadOnlyModelAdmin):
+        """Admin for viewing Dolt commit history for a specific database."""
+
+        list_display = ["hash_short", "committer", "date", "message_preview"]
+        list_filter = ["committer"]
+        search_fields = ["commit_hash", "committer", "message"]
+        ordering = ["-date"]
+        list_per_page = 50
+
+        @admin.display(description="Hash")
+        def hash_short(self, obj: Commit) -> str:
+            return obj.commit_hash[:8]
+
+        @admin.display(description="Message")
+        def message_preview(self, obj: Commit) -> str:
+            if len(obj.message) > 60:
+                return obj.message[:60] + "..."
+            return obj.message
+
+        def get_queryset(self, request: HttpRequest) -> Any:
+            return super().get_queryset(request).using(db_alias)
+
+    class DynamicRemoteAdmin(ReadOnlyModelAdmin):
+        """Admin for viewing Dolt remotes for a specific database."""
+
+        list_display = ["name", "url"]
+        search_fields = ["name", "url"]
+        ordering = ["name"]
+
+        def get_queryset(self, request: HttpRequest) -> Any:
+            return super().get_queryset(request).using(db_alias)
+
+    # Register the admin classes
+    admin.site.register(BranchProxy, DynamicBranchAdmin)
+    admin.site.register(CommitProxy, DynamicCommitAdmin)
+    admin.site.register(RemoteProxy, DynamicRemoteAdmin)
+
+
+def enable_dolt_admin_grouping() -> None:
+    """Enable grouping of Dolt models by database in the default admin site.
+
+    Call this in your app's ready() hook or urls.py to reorganize the admin
+    sidebar so Dolt models are grouped by database:
+
+        INVENTORY DB (DOLT)
+        - Branches
+        - Commits
+        - Remotes
+
+        ORDERS DB (DOLT)
+        - Branches
+        - Commits
+        - Remotes
+
+    Usage in urls.py:
+        from django_dolt.admin import enable_dolt_admin_grouping
+        enable_dolt_admin_grouping()
+    """
+    original_get_app_list = admin.site.get_app_list
+
+    def get_app_list_with_dolt_grouping(
+        request: HttpRequest, app_label: str | None = None
+    ) -> list[dict[str, Any]]:
+        app_list = original_get_app_list(request, app_label)
+
+        # Find the django_dolt app
+        dolt_app = None
+        other_apps = []
+        for app in app_list:
+            if app.get("app_label") == "django_dolt":
+                dolt_app = app
+            else:
+                other_apps.append(app)
+
+        if not dolt_app or not dolt_app.get("models"):
+            return app_list
+
+        # Group models by database
+        db_groups: dict[str, list[dict[str, Any]]] = {}
+        for model in dolt_app["models"]:
+            # Model names are like "Branch_inventory_db", "Commit_orders_db"
+            name = model.get("object_name", "")
+            parts = name.split("_", 1)
+            if len(parts) == 2:
+                db_suffix = parts[1]
+
+                if db_suffix not in db_groups:
+                    db_groups[db_suffix] = []
+
+                # Create a cleaned model entry with simple name
+                cleaned_model = model.copy()
+                # Use verbose_name_plural from the model
+                model_name = str(model.get("name", ""))
+                if "Branch" in model_name:
+                    cleaned_model["name"] = "Branches"
+                elif "Commit" in model_name:
+                    cleaned_model["name"] = "Commits"
+                elif "Remote" in model_name:
+                    cleaned_model["name"] = "Remotes"
+
+                db_groups[db_suffix].append(cleaned_model)
+
+        # Create separate app entries for each database
+        dolt_apps = []
+        for db_suffix, models in sorted(db_groups.items()):
+            db_display = db_suffix.replace("_", " ").title()
+            dolt_apps.append({
+                "name": f"{db_display} (Dolt)",
+                "app_label": f"django_dolt_{db_suffix}",
+                "app_url": dolt_app.get("app_url", ""),
+                "has_module_perms": dolt_app.get("has_module_perms", True),
+                "models": sorted(models, key=lambda m: m.get("name", "")),
+            })
+
+        return other_apps + dolt_apps
+
+    admin.site.get_app_list = get_app_list_with_dolt_grouping  # type: ignore[method-assign]
