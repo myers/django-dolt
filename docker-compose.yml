@@ -1,0 +1,13 @@
+services:
+  dolt:
+    image: dolthub/dolt-sql-server:latest
+    ports:
+      - "8906:3306"
+    environment:
+      DOLT_ROOT_PASSWORD: "dolt"
+      DOLT_ROOT_HOST: "%"
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-pdolt"]
+      interval: 5s
+      timeout: 5s
+      retries: 10

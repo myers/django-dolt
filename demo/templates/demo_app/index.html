@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+
+{% block title %}Home - Django-Dolt Demo{% endblock %}
+
+{% block content %}
+<div class="card">
+    <h2>Multi-Database Dolt Demo</h2>
+    <p>This demo showcases Django-Dolt's multi-database support with two separate Dolt databases:</p>
+    <ul style="margin: 1rem 0 1rem 2rem;">
+        <li><strong>Inventory Database</strong> - Tracks products and categories</li>
+        <li><strong>Orders Database</strong> - Tracks customers and orders</li>
+    </ul>
+    <p>Each database has its own version history, and you can commit changes independently.</p>
+</div>
+
+<div class="grid">
+    <div class="card">
+        <h2>📦 Inventory Database</h2>
+        <div class="grid" style="grid-template-columns: 1fr 1fr;">
+            <div class="stat-box">
+                <div class="number">{{ inventory_stats.categories }}</div>
+                <div class="label">Categories</div>
+            </div>
+            <div class="stat-box">
+                <div class="number">{{ inventory_stats.products }}</div>
+                <div class="label">Products</div>
+            </div>
+        </div>
+        <a href="{% url 'inventory' %}" class="btn">View Inventory →</a>
+    </div>
+
+    <div class="card">
+        <h2>🛒 Orders Database</h2>
+        <div class="grid" style="grid-template-columns: 1fr 1fr;">
+            <div class="stat-box">
+                <div class="number">{{ orders_stats.customers }}</div>
+                <div class="label">Customers</div>
+            </div>
+            <div class="stat-box">
+                <div class="number">{{ orders_stats.orders }}</div>
+                <div class="label">Orders</div>
+            </div>
+        </div>
+        <a href="{% url 'orders' %}" class="btn">View Orders →</a>
+    </div>
+</div>
+
+<div class="card">
+    <h2>🔧 Detected Dolt Databases</h2>
+    {% if dolt_databases %}
+    <ul style="margin-left: 2rem;">
+        {% for db in dolt_databases %}
+        <li><code>{{ db }}</code></li>
+        {% endfor %}
+    </ul>
+    {% else %}
+    <p>No Dolt databases detected. Make sure the Dolt server is running.</p>
+    {% endif %}
+</div>
+{% endblock %}

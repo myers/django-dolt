@@ -1,0 +1,26 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git log:*)",
+      "Bash(uv run pytest:*)",
+      "Bash(uv run mypy:*)",
+      "Bash(uv run ruff check:*)",
+      "Bash(docker-compose ps:*)",
+      "Bash(docker-compose up:*)",
+      "Bash(docker rm:*)",
+      "Bash(uv pip install:*)",
+      "Bash(python manage.py setup_demo:*)",
+      "Bash(uv run python:*)",
+      "Bash(docker logs:*)",
+      "Bash(docker-compose down:*)",
+      "Bash(curl:*)",
+      "Bash(pkill:*)",
+      "Bash(DOLT_PORT=8906 uv run python:*)",
+      "Bash(DOLT_PORT=8906 DJANGO_SETTINGS_MODULE=demo.settings uv run python:*)"
+    ]
+  },
+  "enableAllProjectMcpServers": true,
+  "enabledMcpjsonServers": [
+    "chrome-devtools"
+  ]
+}

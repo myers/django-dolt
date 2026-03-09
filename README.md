@@ -148,3 +148,8 @@ ruff check src/django_dolt
 ## License
 
 MIT
+
+## Inspirations
+- https://www.dolthub.com/blog/2021-06-09-running-django-on-dolt/
+- https://www.dolthub.com/blog/2021-08-27-django-dolt-2/
+- https://www.dolthub.com/blog/2024-01-31-dolt-django/

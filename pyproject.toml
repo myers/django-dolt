@@ -30,6 +30,7 @@ dependencies = ["django>=5.0"]
 
 [project.optional-dependencies]
 dev = ["pytest", "pytest-django", "mypy", "ruff", "django-stubs"]
+demo = ["pymysql"]
 
 [project.urls]
 Homepage = "https://github.com/mediabrainz/django-dolt"
@@ -56,3 +57,6 @@ django_settings_module = "tests.settings"
 [tool.pytest.ini_options]
 DJANGO_SETTINGS_MODULE = "tests.settings"
 pythonpath = ["src"]
+markers = [
+    "integration: marks tests requiring Dolt server (auto-skipped if unavailable)",
+]

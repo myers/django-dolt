@@ -1,0 +1,127 @@
+{% extends "base.html" %}
+
+{% block title %}Orders - Django-Dolt Demo{% endblock %}
+
+{% block content %}
+<div class="grid">
+    <div class="card" style="grid-column: span 2;">
+        <h2>🛒 Orders</h2>
+        {% if orders %}
+        <table>
+            <thead>
+                <tr>
+                    <th>Order #</th>
+                    <th>Customer</th>
+                    <th>Status</th>
+                    <th>Total</th>
+                    <th>Items</th>
+                    <th>Created</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for order in orders %}
+                <tr>
+                    <td><code>{{ order.order_number }}</code></td>
+                    <td>{{ order.customer.first_name }} {{ order.customer.last_name }}</td>
+                    <td><span class="status-badge status-{{ order.status }}">{{ order.get_status_display }}</span></td>
+                    <td>${{ order.total_amount }}</td>
+                    <td>{{ order.items.count }}</td>
+                    <td>{{ order.created_at|date:"M d, Y" }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <p>No orders yet. Add some via the <a href="/admin/orders/order/">admin panel</a>.</p>
+        {% endif %}
+    </div>
+
+    <div class="card">
+        <h2>👥 Customers</h2>
+        {% if customers %}
+        <table>
+            <thead>
+                <tr>
+                    <th>Name</th>
+                    <th>Email</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for customer in customers %}
+                <tr>
+                    <td>{{ customer.first_name }} {{ customer.last_name }}</td>
+                    <td>{{ customer.email }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <p>No customers yet.</p>
+        {% endif %}
+    </div>
+
+    <div class="card">
+        <h2>🔄 Dolt Status</h2>
+        <div class="dolt-status">
+            {% if dolt_status %}
+            <table>
+                <thead>
+                    <tr>
+                        <th>Table</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in dolt_status %}
+                    <tr>
+                        <td>{{ item.table_name }}</td>
+                        <td>
+                            {% if item.staged %}
+                            <span class="staged">staged</span>
+                            {% else %}
+                            <span class="modified">modified</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% else %}
+            <p>No uncommitted changes.</p>
+            {% endif %}
+        </div>
+
+        <form method="post" action="{% url 'dolt_commit' db_alias %}" class="commit-form">
+            {% csrf_token %}
+            <input type="text" name="message" placeholder="Commit message..." required>
+            <button type="submit" class="btn btn-success">Commit</button>
+        </form>
+    </div>
+
+    <div class="card">
+        <h2>📜 Recent Commits</h2>
+        {% if dolt_commits %}
+        <table>
+            <thead>
+                <tr>
+                    <th>Hash</th>
+                    <th>Message</th>
+                    <th>Author</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for commit in dolt_commits %}
+                <tr>
+                    <td><code class="commit-hash">{{ commit.commit_hash|slice:":8" }}</code></td>
+                    <td>{{ commit.message|truncatechars:40 }}</td>
+                    <td>{{ commit.committer }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <p>No commits yet.</p>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
