@@ -42,25 +42,18 @@ def reset_dolt_databases() -> None:
 def _is_dolt_database(alias: str) -> bool:
     """Check if a database is a Dolt database.
 
-    First checks if it's a MySQL-compatible database, then checks for
-    Dolt system tables by attempting to query them directly.
+    Checks the database engine setting to identify MySQL-compatible databases,
+    which are assumed to be Dolt when using this package. This avoids querying
+    the database during app initialization.
 
     Args:
         alias: Database alias from Django settings.
 
     Returns:
-        True if the database is a Dolt database, False otherwise.
+        True if the database uses a MySQL-compatible engine, False otherwise.
     """
-    try:
-        conn = connections[alias]
-        # Only check MySQL-compatible databases
-        if conn.vendor != "mysql":
-            return False
+    from django.conf import settings
 
-        with conn.cursor() as cursor:
-            # Try to query the dolt_branches system table directly
-            # SHOW TABLES doesn't show Dolt system tables
-            cursor.execute("SELECT 1 FROM dolt_branches LIMIT 1")
-            return True
-    except Exception:
-        return False
+    db_settings = settings.DATABASES.get(alias, {})
+    engine = db_settings.get("ENGINE", "")
+    return "mysql" in engine
