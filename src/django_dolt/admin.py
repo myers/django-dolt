@@ -17,6 +17,20 @@ from django.urls import URLPattern, path, reverse
 from django_dolt import services
 from django_dolt.models import Branch, Commit, Remote
 
+# Extension registry: db_alias -> extension config dict
+_branch_extensions: dict[str, dict] = {}
+
+
+def register_branch_extension(db_alias: str, extension: dict) -> None:
+    """Register an extension for a database's Branch admin.
+
+    Extension dict can contain:
+      - get_extra_urls: callable(model_admin) -> list[URLPattern]
+      - get_changelist_context: callable(request, db_alias) -> dict
+      - changelist_template: str (template path to include in changelist)
+    """
+    _branch_extensions[db_alias] = extension
+
 
 class DoltAdminMixin:
     """Mixin to add Dolt views to an existing admin site."""
@@ -395,6 +409,7 @@ def register_dolt_admin(db_alias: str) -> None:
         list_display = ["name", "hash_short", "latest_committer", "latest_commit_date"]
         search_fields = ["name", "latest_committer"]
         ordering = ["name"]
+        change_list_template = "admin/django_dolt/branch_changelist.html"
 
         @admin.display(description="Hash")
         def hash_short(self, obj: Branch) -> str:
@@ -402,6 +417,24 @@ def register_dolt_admin(db_alias: str) -> None:
 
         def get_queryset(self, request: HttpRequest) -> Any:
             return super().get_queryset(request).using(db_alias)
+
+        def get_urls(self) -> list[URLPattern]:
+            urls = super().get_urls()
+            ext = _branch_extensions.get(db_alias)
+            if ext and "get_extra_urls" in ext:
+                extra = ext["get_extra_urls"](self)
+                urls = extra + urls
+            return urls
+
+        def changelist_view(self, request: HttpRequest, extra_context: dict[str, Any] | None = None) -> Any:
+            extra_context = extra_context or {}
+            ext = _branch_extensions.get(db_alias)
+            if ext:
+                if "get_changelist_context" in ext:
+                    extra_context.update(ext["get_changelist_context"](request, db_alias))
+                if "changelist_template" in ext:
+                    extra_context["branch_extension_template"] = ext["changelist_template"]
+            return super().changelist_view(request, extra_context=extra_context)
 
     class DynamicCommitAdmin(ReadOnlyModelAdmin):
         """Admin for viewing Dolt commit history for a specific database."""

@@ -1,15 +1,13 @@
-[build-system]
-requires = ["hatchling"]
-build-backend = "hatchling.build"
-
 [project]
 name = "django-dolt"
-version = "0.1.0"
+dynamic = ["version"]
 description = "Django integration for Dolt version-controlled databases"
 readme = "README.md"
-license = "MIT"
 requires-python = ">=3.12"
-authors = [{ name = "Myers Carpenter", email = "myers@mediabrainz.org" }]
+license = {text = "MIT"}
+authors = [
+    {name = "Myers Carpenter", email = "myers@mediabrainz.org"},
+]
 keywords = ["django", "dolt", "version-control", "database"]
 classifiers = [
     "Development Status :: 3 - Alpha",
@@ -17,24 +15,31 @@ classifiers = [
     "Framework :: Django",
     "Framework :: Django :: 5.0",
     "Framework :: Django :: 5.1",
+    "Framework :: Django :: 6.0",
     "Intended Audience :: Developers",
     "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent",
+    "Programming Language :: Python",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
     "Topic :: Database",
     "Topic :: Software Development :: Version Control",
 ]
 dependencies = ["django>=5.0"]
 
-[project.optional-dependencies]
-dev = ["pytest", "pytest-django", "mypy", "ruff", "django-stubs"]
-demo = ["pymysql"]
-
 [project.urls]
-Homepage = "https://github.com/mediabrainz/django-dolt"
-Repository = "https://github.com/mediabrainz/django-dolt"
+Homepage = "https://github.com/myers/django-dolt"
+Repository = "https://github.com/myers/django-dolt"
+Issues = "https://github.com/myers/django-dolt/issues"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.version]
+path = "src/django_dolt/__init__.py"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/django_dolt"]
@@ -60,3 +65,13 @@ pythonpath = ["src"]
 markers = [
     "integration: marks tests requiring Dolt server (auto-skipped if unavailable)",
 ]
+
+[dependency-groups]
+dev = [
+    "pytest>=7.0",
+    "pytest-django>=4.5",
+    "mypy>=1.0",
+    "ruff>=0.4",
+    "django-stubs>=5.0",
+]
+demo = ["pymysql>=1.0"]

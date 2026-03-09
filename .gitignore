@@ -1,0 +1,22 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+.coverage
+build/
+dist/
+wheels/
+*.egg-info
+
+# Virtual environments
+.venv
+
+# UV lock file
+uv.lock
+
+# AI assistant configs
+.claude/
+
+# Tool caches
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/

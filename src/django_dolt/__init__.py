@@ -55,6 +55,8 @@ __all__ = [
     # Utilities
     "get_ignored_tables",
     "get_dolt_databases",
+    # Admin extension
+    "register_branch_extension",
 ]
 
 
@@ -68,6 +70,10 @@ def __getattr__(name: str) -> Any:
         from django_dolt.dolt_databases import get_dolt_databases
 
         return get_dolt_databases
+    if name == "register_branch_extension":
+        from django_dolt.admin import register_branch_extension
+
+        return register_branch_extension
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
