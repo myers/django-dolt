@@ -347,6 +347,7 @@ def dolt_push(
 def dolt_pull(
     remote: str = "origin",
     branch: str | None = None,
+    user: str | None = None,
     *,
     using: str | None = None,
 ) -> str:
@@ -355,6 +356,7 @@ def dolt_pull(
     Args:
         remote: Remote name (default: "origin")
         branch: Branch to pull (default: current branch)
+        user: Remote username for authentication
         using: Database alias to use (default: None for default database)
 
     Returns:
@@ -363,13 +365,22 @@ def dolt_pull(
     Raises:
         DoltPullError: If pull fails
     """
+    if user is None:
+        user = os.environ.get("DOLT_REMOTE_USER", "")
+
     if branch is None:
         branch = dolt_current_branch(using=using)
 
     try:
         conn = _get_connection(using)
         with conn.cursor() as cursor:
-            cursor.execute("CALL DOLT_PULL(%s, %s)", [remote, branch])
+            pull_args: list[str] = []
+            if user:
+                pull_args.extend(["--user", user])
+            pull_args.extend([remote, branch])
+
+            placeholders = ", ".join(["%s"] * len(pull_args))
+            cursor.execute(f"CALL DOLT_PULL({placeholders})", pull_args)  # noqa: S608
             result = cursor.fetchone()
             # dolt_pull returns (fast_forward, conflicts, message)
             if result:
@@ -385,11 +396,17 @@ def dolt_pull(
         raise DoltPullError(f"Pull failed: {e}") from e
 
 
-def dolt_fetch(remote: str = "origin", *, using: str | None = None) -> str:
+def dolt_fetch(
+    remote: str = "origin",
+    user: str | None = None,
+    *,
+    using: str | None = None,
+) -> str:
     """Fetch changes from remote without merging.
 
     Args:
         remote: Remote name (default: "origin")
+        user: Remote username for authentication
         using: Database alias to use (default: None for default database)
 
     Returns:
@@ -398,10 +415,19 @@ def dolt_fetch(remote: str = "origin", *, using: str | None = None) -> str:
     Raises:
         DoltError: If fetch fails
     """
+    if user is None:
+        user = os.environ.get("DOLT_REMOTE_USER", "")
+
     try:
         conn = _get_connection(using)
         with conn.cursor() as cursor:
-            cursor.execute("CALL DOLT_FETCH(%s)", [remote])
+            fetch_args: list[str] = []
+            if user:
+                fetch_args.extend(["--user", user])
+            fetch_args.append(remote)
+
+            placeholders = ", ".join(["%s"] * len(fetch_args))
+            cursor.execute(f"CALL DOLT_FETCH({placeholders})", fetch_args)  # noqa: S608
             return f"Fetched from {remote}"
     except Exception as e:
         raise DoltError(f"Fetch failed: {e}") from e

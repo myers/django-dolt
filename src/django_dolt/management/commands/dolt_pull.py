@@ -35,6 +35,12 @@ class Command(BaseCommand):
             help="Only fetch, don't merge",
         )
         parser.add_argument(
+            "--user",
+            type=str,
+            default=None,
+            help="Remote username for authentication (default: DOLT_REMOTE_USER env var)",
+        )
+        parser.add_argument(
             "--database",
             type=str,
             default=None,
@@ -45,6 +51,7 @@ class Command(BaseCommand):
         remote: str = options["remote"]
         branch: str | None = options["branch"]
         fetch_only: bool = options["fetch_only"]
+        user: str | None = options["user"]
         using: str | None = options["database"]
 
         current_branch = services.dolt_current_branch(using=using)
@@ -55,7 +62,7 @@ class Command(BaseCommand):
         if fetch_only:
             self.stdout.write(f"Fetching from {remote}...")
             try:
-                result = services.dolt_fetch(remote, using=using)
+                result = services.dolt_fetch(remote, user=user, using=using)
                 self.stdout.write(self.style.SUCCESS(result))
             except services.DoltError as e:
                 self.stdout.write(self.style.ERROR(f"Fetch failed: {e}"))
@@ -63,7 +70,7 @@ class Command(BaseCommand):
         else:
             self.stdout.write(f"Pulling {target_branch} from {remote}...")
             try:
-                result = services.dolt_pull(remote, target_branch, using=using)
+                result = services.dolt_pull(remote, target_branch, user=user, using=using)
                 self.stdout.write(self.style.SUCCESS(result))
             except services.DoltPullError as e:
                 self.stdout.write(self.style.ERROR(f"Pull failed: {e}"))
