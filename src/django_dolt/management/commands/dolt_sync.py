@@ -47,6 +47,12 @@ class Command(BaseCommand):
             nargs="*",
             help="Specific tables to stage (default: all with changes)",
         )
+        parser.add_argument(
+            "--database",
+            type=str,
+            default=None,
+            help="Django database alias to use (default: default connection)",
+        )
 
     def handle(self, *args: Any, **options: Any) -> None:
         message: str | None = options["message"]
@@ -54,10 +60,11 @@ class Command(BaseCommand):
         no_push: bool = options["no_push"]
         author: str = options["author"]
         tables: list[str] | None = options.get("tables")
+        self._using: str | None = options["database"]
 
         self.stdout.write("Checking for uncommitted changes...")
 
-        status = services.dolt_status(exclude_ignored=True)
+        status = services.dolt_status(exclude_ignored=True, using=self._using)
 
         if not status:
             self.stdout.write("No changes to commit")
@@ -79,7 +86,7 @@ class Command(BaseCommand):
         # Stage tables
         for table in tables_to_stage:
             try:
-                services.dolt_add(table)
+                services.dolt_add(table, using=self._using)
                 self.stdout.write(f"  Staged: {table}")
             except services.DoltError as e:
                 self.stdout.write(f"  Note: Could not stage {table}: {e}")
@@ -91,7 +98,7 @@ class Command(BaseCommand):
 
         # Commit
         try:
-            commit_hash = services.dolt_commit(message, author=author)
+            commit_hash = services.dolt_commit(message, author=author, using=self._using)
             if commit_hash:
                 self.stdout.write(
                     self.style.SUCCESS(
@@ -115,7 +122,7 @@ class Command(BaseCommand):
             self.stdout.write("   Using --force flag")
 
         try:
-            result = services.dolt_push(force=force)
+            result = services.dolt_push(force=force, using=self._using)
             self.stdout.write(self.style.SUCCESS(f"Success: {result}"))
         except services.DoltPushError as e:
             self.stdout.write(self.style.ERROR(f"Push failed: {e}"))

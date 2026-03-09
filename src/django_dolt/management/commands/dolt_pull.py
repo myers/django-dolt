@@ -34,13 +34,20 @@ class Command(BaseCommand):
             action="store_true",
             help="Only fetch, don't merge",
         )
+        parser.add_argument(
+            "--database",
+            type=str,
+            default=None,
+            help="Django database alias to use (default: default connection)",
+        )
 
     def handle(self, *args: Any, **options: Any) -> None:
         remote: str = options["remote"]
         branch: str | None = options["branch"]
         fetch_only: bool = options["fetch_only"]
+        using: str | None = options["database"]
 
-        current_branch = services.dolt_current_branch()
+        current_branch = services.dolt_current_branch(using=using)
         target_branch = branch or current_branch
 
         self.stdout.write(f"Current branch: {current_branch}")
@@ -48,7 +55,7 @@ class Command(BaseCommand):
         if fetch_only:
             self.stdout.write(f"Fetching from {remote}...")
             try:
-                result = services.dolt_fetch(remote)
+                result = services.dolt_fetch(remote, using=using)
                 self.stdout.write(self.style.SUCCESS(result))
             except services.DoltError as e:
                 self.stdout.write(self.style.ERROR(f"Fetch failed: {e}"))
@@ -56,7 +63,7 @@ class Command(BaseCommand):
         else:
             self.stdout.write(f"Pulling {target_branch} from {remote}...")
             try:
-                result = services.dolt_pull(remote, target_branch)
+                result = services.dolt_pull(remote, target_branch, using=using)
                 self.stdout.write(self.style.SUCCESS(result))
             except services.DoltPullError as e:
                 self.stdout.write(self.style.ERROR(f"Pull failed: {e}"))
@@ -65,7 +72,7 @@ class Command(BaseCommand):
         # Show diff summary if there were changes
         self.stdout.write("\nChecking for changes...")
         try:
-            commits = services.dolt_log(limit=1)
+            commits = services.dolt_log(limit=1, using=using)
             if commits:
                 latest = commits[0]
                 self.stdout.write(

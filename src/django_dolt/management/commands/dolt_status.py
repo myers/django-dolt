@@ -29,20 +29,27 @@ class Command(BaseCommand):
             metavar="N",
             help="Show N recent commits (default: 0, no commits shown)",
         )
+        parser.add_argument(
+            "--database",
+            type=str,
+            default=None,
+            help="Django database alias to use (default: default connection)",
+        )
 
     def handle(self, *args: Any, **options: Any) -> None:
         show_all: bool = options["all"]
         log_count: int = options["log"]
+        using: str | None = options["database"]
 
         self.stdout.write("Dolt Database Status")
         self.stdout.write("=" * 40)
 
         # Current branch
-        branch = services.dolt_current_branch()
+        branch = services.dolt_current_branch(using=using)
         self.stdout.write(f"\nBranch: {branch}")
 
         # Check for uncommitted changes
-        status = services.dolt_status(exclude_ignored=not show_all)
+        status = services.dolt_status(exclude_ignored=not show_all, using=using)
 
         if status:
             self.stdout.write("\nUncommitted changes:")
@@ -51,14 +58,14 @@ class Command(BaseCommand):
             self.stdout.write("\nNo uncommitted changes")
 
         # Show ignored patterns
-        ignored = services.get_ignored_tables()
+        ignored = services.get_ignored_tables(using=using)
         if ignored:
             self.stdout.write(f"\nIgnored patterns: {', '.join(ignored)}")
 
         # Show recent commits if requested
         if log_count > 0:
             self.stdout.write(f"\nRecent commits (last {log_count}):")
-            commits = services.dolt_log(limit=log_count)
+            commits = services.dolt_log(limit=log_count, using=using)
             for commit in commits:
                 hash_short = commit["commit_hash"][:8]
                 date = commit["date"]
