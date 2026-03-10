@@ -10,7 +10,7 @@ authors = [
 ]
 keywords = ["django", "dolt", "version-control", "database"]
 classifiers = [
-    "Development Status :: 3 - Alpha",
+    "Development Status :: 4 - Beta",
     "Environment :: Web Environment",
     "Framework :: Django",
     "Framework :: Django :: 5.0",
@@ -61,10 +61,8 @@ django_settings_module = "tests.settings"
 
 [tool.pytest.ini_options]
 DJANGO_SETTINGS_MODULE = "tests.settings"
-pythonpath = ["src"]
-markers = [
-    "integration: marks tests requiring Dolt server (auto-skipped if unavailable)",
-]
+pythonpath = ["src", "."]
+markers = []
 
 [dependency-groups]
 dev = [
@@ -73,5 +71,6 @@ dev = [
     "mypy>=1.0",
     "ruff>=0.4",
     "django-stubs>=5.0",
+    "pymysql>=1.0",
 ]
 demo = ["pymysql>=1.0"]

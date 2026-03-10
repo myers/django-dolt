@@ -1,9 +1,8 @@
-#!/usr/bin/env python3
 """
 Release script for django-dolt
 Bumps version, commits, tags, and pushes to git remote
 
-Usage: ./bin/release.py [patch|minor|major]
+Usage: bin/release [patch|minor|major]
 Default: patch
 """
 
@@ -11,7 +10,6 @@ import re
 import subprocess
 import sys
 from pathlib import Path
-from typing import Optional
 
 # ANSI color codes
 RED = "\033[0;31m"
@@ -40,14 +38,24 @@ def is_working_directory_clean() -> bool:
     return result1.returncode == 0 and result2.returncode == 0
 
 
-def get_current_version() -> Optional[str]:
+def _find_init_path() -> Path:
+    """Find the __init__.py file relative to the project root."""
+    # Walk up from this file to find the project root (where pyproject.toml is)
+    current = Path(__file__).resolve()
+    for parent in current.parents:
+        if (parent / "pyproject.toml").exists():
+            return parent / "src" / "django_dolt" / "__init__.py"
+    raise FileNotFoundError("Could not find project root (no pyproject.toml)")
+
+
+def get_current_version() -> str | None:
     """Extract current version from src/django_dolt/__init__.py."""
-    init_path = Path(__file__).parent.parent / "src" / "django_dolt" / "__init__.py"
+    init_path = _find_init_path()
 
     if not init_path.exists():
         return None
 
-    with open(init_path, "r") as f:
+    with open(init_path) as f:
         content = f.read()
 
     match = re.search(r'^__version__ = "([^"]+)"', content, re.MULTILINE)
@@ -79,9 +87,9 @@ def bump_version(current_version: str, bump_type: str) -> str:
 
 def update_version_in_file(new_version: str) -> bool:
     """Update version in src/django_dolt/__init__.py."""
-    init_path = Path(__file__).parent.parent / "src" / "django_dolt" / "__init__.py"
+    init_path = _find_init_path()
 
-    with open(init_path, "r") as f:
+    with open(init_path) as f:
         content = f.read()
 
     new_content = re.sub(
@@ -112,7 +120,7 @@ def main():
 
     if bump_type not in ("patch", "minor", "major"):
         print(f"{RED}Error: Invalid bump type '{bump_type}'{NC}")
-        print("Usage: release.py [patch|minor|major]")
+        print("Usage: bin/release [patch|minor|major]")
         sys.exit(1)
 
     if not is_working_directory_clean():
@@ -124,7 +132,8 @@ def main():
     current_branch = get_current_branch()
     if current_branch not in ("main", "master"):
         print(
-            f"{YELLOW}Warning: Not on main/master branch (current: {current_branch}){NC}"
+            f"{YELLOW}Warning: Not on main/master branch "
+            f"(current: {current_branch}){NC}"
         )
         if not confirm("Continue anyway?"):
             sys.exit(1)

@@ -25,7 +25,7 @@ from django_dolt.services import (
     get_ignored_tables,
 )
 
-__version__ = "0.1.0"
+__version__ = "1.0.0"
 __all__ = [
     # Models (lazy-loaded)
     "Branch",
@@ -75,6 +75,3 @@ def __getattr__(name: str) -> Any:
 
         return register_branch_extension
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
-
-
-default_app_config = "django_dolt.apps.DjangoDoltConfig"

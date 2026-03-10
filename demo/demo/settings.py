@@ -16,6 +16,7 @@ import pymysql
 pymysql.install_as_MySQLdb()
 # Patch version to satisfy Django's mysqlclient version check
 pymysql.version_info = (2, 2, 1, "final", 0)
+pymysql.VERSION = pymysql.version_info
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 

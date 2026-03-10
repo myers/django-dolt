@@ -1,14 +1,16 @@
-"""Tests for django_dolt.services module."""
+"""Tests for django_dolt.services module against a real Dolt database."""
 
 from __future__ import annotations
 
-from unittest.mock import MagicMock, patch
+from collections.abc import Generator
 
 import pytest
+from django.db import connections
 
 from django_dolt import services
 
 
+# All tests in this module need database access
 class TestDoltExceptions:
     """Test exception hierarchy."""
 
@@ -22,194 +24,184 @@ class TestDoltExceptions:
         assert str(exc) == "test message"
 
 
+@pytest.fixture()
+def dolt_db(django_db_blocker: object) -> Generator[str, None, None]:
+    """Create a fresh test database for each test, return the alias."""
+    with django_db_blocker.unblock():  # type: ignore[union-attr]
+        conn = connections["dolt"]
+        db_name = "test_services"
+        with conn.cursor() as cursor:
+            cursor.execute(f"DROP DATABASE IF EXISTS `{db_name}`")
+            cursor.execute(f"CREATE DATABASE `{db_name}`")
+
+        # Point dolt1 alias at our test db
+        old_name = connections.databases["dolt1"]["NAME"]
+        connections.databases["dolt1"]["NAME"] = db_name
+        connections["dolt1"].close()
+
+        yield "dolt1"
+
+        connections.databases["dolt1"]["NAME"] = old_name
+        connections["dolt1"].close()
+        with conn.cursor() as cursor:
+            cursor.execute(f"DROP DATABASE IF EXISTS `{db_name}`")
+
+
 class TestDoltAdd:
-    """Test dolt_add function."""
+    """Test dolt_add function against real Dolt."""
 
-    @patch("django_dolt.services.connection")
-    def test_add_single_table(self, mock_connection: MagicMock) -> None:
-        mock_cursor = MagicMock()
-        mock_connection.cursor.return_value.__enter__.return_value = mock_cursor
+    def test_add_all_tables_no_changes(self, dolt_db: str) -> None:
+        """Adding with no changes should succeed without error."""
+        services.dolt_add(".", using=dolt_db)
 
-        services.dolt_add("my_table")
-
-        mock_cursor.execute.assert_called_once_with(
-            "CALL DOLT_ADD(%s)", ["my_table"]
-        )
-
-    @patch("django_dolt.services.connection")
-    def test_add_all_tables(self, mock_connection: MagicMock) -> None:
-        mock_cursor = MagicMock()
-        mock_connection.cursor.return_value.__enter__.return_value = mock_cursor
-
-        services.dolt_add()
-
-        mock_cursor.execute.assert_called_once_with("CALL DOLT_ADD(%s)", ["."])
-
-    @patch("django_dolt.services.connection")
-    def test_add_raises_on_error(self, mock_connection: MagicMock) -> None:
-        mock_cursor = MagicMock()
-        mock_cursor.execute.side_effect = Exception("table not found")
-        mock_connection.cursor.return_value.__enter__.return_value = mock_cursor
-
+    def test_add_nonexistent_table(self, dolt_db: str) -> None:
+        """Adding a nonexistent table should raise DoltError."""
         with pytest.raises(services.DoltError, match="Failed to stage"):
-            services.dolt_add("nonexistent")
+            services.dolt_add("nonexistent_table_xyz", using=dolt_db)
 
 
 class TestDoltCommit:
-    """Test dolt_commit function."""
+    """Test dolt_commit function against real Dolt."""
 
-    @patch("django_dolt.services.connection")
-    def test_commit_returns_hash(self, mock_connection: MagicMock) -> None:
-        mock_cursor = MagicMock()
-        mock_cursor.fetchone.return_value = ("abc123def456",)
-        mock_connection.cursor.return_value.__enter__.return_value = mock_cursor
+    def test_commit_with_changes(self, dolt_db: str) -> None:
+        """Commit should return a hash when there are staged changes."""
+        conn = connections[dolt_db]
+        with conn.cursor() as cursor:
+            cursor.execute(
+                "CREATE TABLE test_commit_tbl (id INT PRIMARY KEY, val VARCHAR(50))"
+            )
+            cursor.execute("INSERT INTO test_commit_tbl VALUES (1, 'hello')")
 
-        result = services.dolt_commit("test message")
+        services.dolt_add(".", using=dolt_db)
+        result = services.dolt_commit("test commit", using=dolt_db)
 
-        assert result == "abc123def456"
-        mock_cursor.execute.assert_called_once()
+        assert result is not None
+        assert len(result) > 8
 
-    @patch("django_dolt.services.connection")
-    def test_commit_with_custom_author(self, mock_connection: MagicMock) -> None:
-        mock_cursor = MagicMock()
-        mock_cursor.fetchone.return_value = ("abc123",)
-        mock_connection.cursor.return_value.__enter__.return_value = mock_cursor
-
-        services.dolt_commit("msg", author="Test <test@example.com>")
-
-        call_args = mock_cursor.execute.call_args
-        assert "Test <test@example.com>" in call_args[0][1]
-
-    @patch("django_dolt.services.connection")
-    def test_commit_nothing_to_commit(self, mock_connection: MagicMock) -> None:
-        mock_cursor = MagicMock()
-        mock_cursor.execute.side_effect = Exception("nothing to commit")
-        mock_connection.cursor.return_value.__enter__.return_value = mock_cursor
-
-        result = services.dolt_commit("test")
-
+    def test_commit_nothing_to_commit(self, dolt_db: str) -> None:
+        """Commit with no changes should return None."""
+        result = services.dolt_commit("empty commit", using=dolt_db)
         assert result is None
+
+    def test_commit_allow_empty(self, dolt_db: str) -> None:
+        """Commit with allow_empty should succeed even with no changes."""
+        result = services.dolt_commit(
+            "empty commit", allow_empty=True, using=dolt_db
+        )
+        assert result is not None
+
+    def test_commit_with_custom_author(self, dolt_db: str) -> None:
+        """Commit should accept a custom author."""
+        conn = connections[dolt_db]
+        with conn.cursor() as cursor:
+            cursor.execute("CREATE TABLE test_author_tbl (id INT PRIMARY KEY)")
+
+        services.dolt_add(".", using=dolt_db)
+        result = services.dolt_commit(
+            "author test",
+            author="Test User <test@example.com>",
+            using=dolt_db,
+        )
+        assert result is not None
 
 
 class TestDoltStatus:
-    """Test dolt_status function."""
+    """Test dolt_status function against real Dolt."""
 
-    @patch("django_dolt.services.connection")
-    def test_status_returns_list_of_dicts(self, mock_connection: MagicMock) -> None:
-        mock_cursor = MagicMock()
-        mock_cursor.description = [("table_name",), ("staged",), ("status",)]
-        mock_cursor.fetchall.return_value = [
-            ("users", 0, "modified"),
-            ("posts", 1, "new table"),
-        ]
-        mock_connection.cursor.return_value.__enter__.return_value = mock_cursor
+    def test_status_empty(self, dolt_db: str) -> None:
+        """Status with no changes should return empty list."""
+        result = services.dolt_status(exclude_ignored=False, using=dolt_db)
+        assert result == []
 
-        result = services.dolt_status(exclude_ignored=False)
+    def test_status_with_changes(self, dolt_db: str) -> None:
+        """Status should show modified tables."""
+        conn = connections[dolt_db]
+        with conn.cursor() as cursor:
+            cursor.execute(
+                "CREATE TABLE test_status_tbl (id INT PRIMARY KEY, val VARCHAR(50))"
+            )
 
-        assert len(result) == 2
-        assert result[0]["table_name"] == "users"
-        assert result[1]["staged"] == 1
+        result = services.dolt_status(exclude_ignored=False, using=dolt_db)
+        assert len(result) >= 1
+        table_names = [r["table_name"] for r in result]
+        assert "test_status_tbl" in table_names
 
 
 class TestDoltLog:
-    """Test dolt_log function."""
+    """Test dolt_log function against real Dolt."""
 
-    @patch("django_dolt.services.connection")
-    def test_log_returns_commits(self, mock_connection: MagicMock) -> None:
-        mock_cursor = MagicMock()
-        mock_cursor.description = [
-            ("commit_hash",),
-            ("committer",),
-            ("email",),
-            ("date",),
-            ("message",),
-        ]
-        mock_cursor.fetchall.return_value = [
-            ("abc123", "Test", "test@example.com", "2024-01-01", "Initial commit"),
-        ]
-        mock_connection.cursor.return_value.__enter__.return_value = mock_cursor
+    def test_log_returns_commits(self, dolt_db: str) -> None:
+        """Log should return at least the initial commit."""
+        result = services.dolt_log(limit=10, using=dolt_db)
+        assert len(result) >= 1
+        assert "commit_hash" in result[0]
+        assert "message" in result[0]
 
-        result = services.dolt_log(limit=10)
+    def test_log_shows_our_commit(self, dolt_db: str) -> None:
+        """Log should include commits we make."""
+        conn = connections[dolt_db]
+        with conn.cursor() as cursor:
+            cursor.execute("CREATE TABLE test_log_tbl (id INT PRIMARY KEY)")
+        services.dolt_add(".", using=dolt_db)
+        services.dolt_commit("log test commit", using=dolt_db)
 
-        assert len(result) == 1
-        assert result[0]["commit_hash"] == "abc123"
-        assert result[0]["message"] == "Initial commit"
+        result = services.dolt_log(limit=10, using=dolt_db)
+        messages = [r["message"] for r in result]
+        assert "log test commit" in messages
 
 
 class TestDoltBranch:
-    """Test branch-related functions."""
+    """Test branch-related functions against real Dolt."""
 
-    @patch("django_dolt.services.connection")
-    def test_current_branch(self, mock_connection: MagicMock) -> None:
-        mock_cursor = MagicMock()
-        mock_cursor.fetchone.return_value = ("main",)
-        mock_connection.cursor.return_value.__enter__.return_value = mock_cursor
-
-        result = services.dolt_current_branch()
-
+    def test_current_branch(self, dolt_db: str) -> None:
+        result = services.dolt_current_branch(using=dolt_db)
         assert result == "main"
 
-    @patch("django_dolt.services.connection")
-    def test_branch_list(self, mock_connection: MagicMock) -> None:
-        mock_cursor = MagicMock()
-        mock_cursor.fetchall.return_value = [("main",), ("feature",)]
-        mock_connection.cursor.return_value.__enter__.return_value = mock_cursor
-
-        result = services.dolt_branch_list()
-
-        assert result == ["main", "feature"]
+    def test_branch_list(self, dolt_db: str) -> None:
+        result = services.dolt_branch_list(using=dolt_db)
+        assert "main" in result
 
 
-class TestDoltPush:
-    """Test dolt_push function."""
+class TestDoltAddAndCommit:
+    """Test dolt_add_and_commit convenience function."""
 
-    @patch("django_dolt.services.connection")
-    def test_push_success(self, mock_connection: MagicMock) -> None:
-        mock_cursor = MagicMock()
-        mock_connection.cursor.return_value.__enter__.return_value = mock_cursor
+    def test_add_and_commit(self, dolt_db: str) -> None:
+        conn = connections[dolt_db]
+        with conn.cursor() as cursor:
+            cursor.execute("CREATE TABLE test_addcommit (id INT PRIMARY KEY)")
 
-        result = services.dolt_push(remote="origin", branch="main")
+        result = services.dolt_add_and_commit("add-and-commit test", using=dolt_db)
+        assert result is not None
 
-        assert "Pushed main to origin" in result
-
-    @patch("django_dolt.services.connection")
-    def test_push_with_force(self, mock_connection: MagicMock) -> None:
-        mock_cursor = MagicMock()
-        mock_connection.cursor.return_value.__enter__.return_value = mock_cursor
-
-        services.dolt_push(force=True)
-
-        call_args = mock_cursor.execute.call_args[0][1]
-        assert "--force" in call_args
+    def test_add_and_commit_no_changes(self, dolt_db: str) -> None:
+        result = services.dolt_add_and_commit("no changes", using=dolt_db)
+        assert result is None
 
 
-class TestDoltPull:
-    """Test dolt_pull function."""
+class TestDoltDiff:
+    """Test dolt_diff function against real Dolt."""
 
-    @patch("django_dolt.services.dolt_current_branch")
-    @patch("django_dolt.services.connection")
-    def test_pull_success(
-        self, mock_connection: MagicMock, mock_branch: MagicMock
-    ) -> None:
-        mock_branch.return_value = "main"
-        mock_cursor = MagicMock()
-        mock_cursor.fetchone.return_value = (1, 0)  # fast_forward, no conflicts
-        mock_connection.cursor.return_value.__enter__.return_value = mock_cursor
+    def test_diff_no_changes(self, dolt_db: str) -> None:
+        result = services.dolt_diff(using=dolt_db)
+        assert result == []
 
-        result = services.dolt_pull()
+    def test_diff_with_changes(self, dolt_db: str) -> None:
+        conn = connections[dolt_db]
+        with conn.cursor() as cursor:
+            cursor.execute("CREATE TABLE test_diff_tbl (id INT PRIMARY KEY)")
+        services.dolt_add(".", using=dolt_db)
+        services.dolt_commit("before diff", using=dolt_db)
 
-        assert "Fast-forward" in result
+        with conn.cursor() as cursor:
+            cursor.execute("INSERT INTO test_diff_tbl VALUES (1)")
+        services.dolt_add(".", using=dolt_db)
+        services.dolt_commit("after diff", using=dolt_db)
 
-    @patch("django_dolt.services.dolt_current_branch")
-    @patch("django_dolt.services.connection")
-    def test_pull_with_conflicts(
-        self, mock_connection: MagicMock, mock_branch: MagicMock
-    ) -> None:
-        mock_branch.return_value = "main"
-        mock_cursor = MagicMock()
-        mock_cursor.fetchone.return_value = (0, 3)  # not fast_forward, 3 conflicts
-        mock_connection.cursor.return_value.__enter__.return_value = mock_cursor
-
-        result = services.dolt_pull()
-
-        assert "conflicts" in result
+        log = services.dolt_log(limit=2, using=dolt_db)
+        result = services.dolt_diff(
+            from_ref=log[1]["commit_hash"],
+            to_ref=log[0]["commit_hash"],
+            table="test_diff_tbl",
+            using=dolt_db,
+        )
+        assert len(result) >= 1

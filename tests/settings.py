@@ -2,6 +2,14 @@
 
 import os
 
+import pymysql
+
+pymysql.install_as_MySQLdb()
+# Django 6.0 requires mysqlclient 2.2.1+; pymysql reports 1.4.6.
+# Patch the version so Django's MySQL backend accepts pymysql.
+pymysql.version_info = (2, 2, 1, "final", 0)
+pymysql.VERSION = pymysql.version_info
+
 SECRET_KEY = "test-secret-key-not-for-production"
 
 INSTALLED_APPS = [
@@ -17,39 +25,35 @@ DATABASES = {
     "default": {
         "ENGINE": "django.db.backends.sqlite3",
         "NAME": ":memory:",
-    }
+    },
+    "dolt": {
+        "ENGINE": "django.db.backends.mysql",
+        "HOST": os.environ.get("DOLT_HOST", "127.0.0.1"),
+        "PORT": int(os.environ.get("DOLT_PORT", "8906")),
+        "USER": os.environ.get("DOLT_USER", "root"),
+        "PASSWORD": os.environ.get("DOLT_PASSWORD", "dolt"),
+        "NAME": "information_schema",
+        "TEST": {"DEPENDENCIES": [], "NAME": "information_schema"},
+    },
+    "dolt1": {
+        "ENGINE": "django.db.backends.mysql",
+        "HOST": os.environ.get("DOLT_HOST", "127.0.0.1"),
+        "PORT": int(os.environ.get("DOLT_PORT", "8906")),
+        "USER": os.environ.get("DOLT_USER", "root"),
+        "PASSWORD": os.environ.get("DOLT_PASSWORD", "dolt"),
+        "NAME": "test_dolt1",
+        "TEST": {"DEPENDENCIES": [], "NAME": "test_dolt1"},
+    },
+    "dolt2": {
+        "ENGINE": "django.db.backends.mysql",
+        "HOST": os.environ.get("DOLT_HOST", "127.0.0.1"),
+        "PORT": int(os.environ.get("DOLT_PORT", "8906")),
+        "USER": os.environ.get("DOLT_USER", "root"),
+        "PASSWORD": os.environ.get("DOLT_PASSWORD", "dolt"),
+        "NAME": "test_dolt2",
+        "TEST": {"DEPENDENCIES": [], "NAME": "test_dolt2"},
+    },
 }
-
-# Add Dolt databases if DOLT_HOST is set (for integration tests)
-if os.environ.get("DOLT_HOST"):
-    DATABASES.update(
-        {
-            "dolt": {
-                "ENGINE": "django.db.backends.mysql",
-                "HOST": os.environ.get("DOLT_HOST", "127.0.0.1"),
-                "PORT": int(os.environ.get("DOLT_PORT", "3306")),
-                "USER": os.environ.get("DOLT_USER", "root"),
-                "PASSWORD": os.environ.get("DOLT_PASSWORD", "dolt"),
-                "NAME": "information_schema",  # Connect to root for DB creation
-            },
-            "dolt1": {
-                "ENGINE": "django.db.backends.mysql",
-                "HOST": os.environ.get("DOLT_HOST", "127.0.0.1"),
-                "PORT": int(os.environ.get("DOLT_PORT", "3306")),
-                "USER": os.environ.get("DOLT_USER", "root"),
-                "PASSWORD": os.environ.get("DOLT_PASSWORD", "dolt"),
-                "NAME": "test_dolt1",
-            },
-            "dolt2": {
-                "ENGINE": "django.db.backends.mysql",
-                "HOST": os.environ.get("DOLT_HOST", "127.0.0.1"),
-                "PORT": int(os.environ.get("DOLT_PORT", "3306")),
-                "USER": os.environ.get("DOLT_USER", "root"),
-                "PASSWORD": os.environ.get("DOLT_PASSWORD", "dolt"),
-                "NAME": "test_dolt2",
-            },
-        }
-    )
 
 TEMPLATES = [
     {

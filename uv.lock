@@ -36,35 +36,37 @@ wheels = [
 
 [[package]]
 name = "django-dolt"
-version = "0.1.0"
 source = { editable = "." }
 dependencies = [
     { name = "django" },
 ]
 
-[package.optional-dependencies]
+[package.dev-dependencies]
 demo = [
     { name = "pymysql" },
 ]
 dev = [
     { name = "django-stubs" },
     { name = "mypy" },
+    { name = "pymysql" },
     { name = "pytest" },
     { name = "pytest-django" },
     { name = "ruff" },
 ]
 
 [package.metadata]
-requires-dist = [
-    { name = "django", specifier = ">=5.0" },
-    { name = "django-stubs", marker = "extra == 'dev'" },
-    { name = "mypy", marker = "extra == 'dev'" },
-    { name = "pymysql", marker = "extra == 'demo'" },
-    { name = "pytest", marker = "extra == 'dev'" },
-    { name = "pytest-django", marker = "extra == 'dev'" },
-    { name = "ruff", marker = "extra == 'dev'" },
+requires-dist = [{ name = "django", specifier = ">=5.0" }]
+
+[package.metadata.requires-dev]
+demo = [{ name = "pymysql", specifier = ">=1.0" }]
+dev = [
+    { name = "django-stubs", specifier = ">=5.0" },
+    { name = "mypy", specifier = ">=1.0" },
+    { name = "pymysql", specifier = ">=1.0" },
+    { name = "pytest", specifier = ">=7.0" },
+    { name = "pytest-django", specifier = ">=4.5" },
+    { name = "ruff", specifier = ">=0.4" },
 ]
-provides-extras = ["dev", "demo"]
 
 [[package]]
 name = "django-stubs"
