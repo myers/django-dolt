@@ -74,7 +74,7 @@ def dolt_autocommit(
         def wrapper(request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
             response = view_fn(request, *args, **kwargs)
 
-            if not commit_on(response):  # type: ignore[misc]
+            if not commit_on(response):
                 return response
 
             # Resolve databases to check

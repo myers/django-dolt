@@ -1,6 +1,7 @@
 """Tests for django_dolt.services module against a real Dolt database."""
 
 from collections.abc import Generator
+from typing import Any
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -26,7 +27,7 @@ class TestDoltExceptions:
 @pytest.fixture()
 def dolt_db(django_db_blocker: object) -> Generator[str, None, None]:
     """Create a fresh test database for each test, return the alias."""
-    with django_db_blocker.unblock():  # type: ignore[union-attr]
+    with django_db_blocker.unblock():  # type: ignore[attr-defined]
         conn = connections["dolt"]
         db_name = "test_services"
         with conn.cursor() as cursor:
@@ -305,7 +306,7 @@ class TestDoltAddRemoteMocked:
 class TestDoltRemotesMocked:
     """Test dolt_remotes with mocked cursor."""
 
-    @patch("django_dolt.models._conn")
+    @patch("django_dolt.models._get_connection")
     def test_remotes_returns_list(self, mock_conn: MagicMock) -> None:
         mock_cursor = MagicMock()
         mock_cursor.description = [("name",), ("url",)]
@@ -328,7 +329,7 @@ class TestDoltRemotesMocked:
 class TestGetIgnoredTablesMocked:
     """Test get_ignored_tables with mocked cursor."""
 
-    @patch("django_dolt.models._conn")
+    @patch("django_dolt.models._get_connection")
     def test_ignored_tables_returns_patterns(
         self, mock_conn: MagicMock
     ) -> None:
@@ -351,7 +352,7 @@ class TestGetIgnoredTablesMocked:
 class TestDoltStatusErrorHandling:
     """Test dolt_status error handling."""
 
-    @patch("django_dolt.models._conn")
+    @patch("django_dolt.models._get_connection")
     def test_status_wraps_exception_in_dolt_error(
         self, mock_conn: MagicMock
     ) -> None:
@@ -371,7 +372,7 @@ class TestDoltStatusErrorHandling:
         ):
             services.dolt_status(exclude_ignored=False)
 
-    @patch("django_dolt.models._conn")
+    @patch("django_dolt.models._get_connection")
     def test_status_exclude_ignored_falls_back(
         self, mock_conn: MagicMock
     ) -> None:
@@ -379,7 +380,7 @@ class TestDoltStatusErrorHandling:
         mock_cursor = MagicMock()
         call_count = 0
 
-        def execute_side_effect(sql, *args):
+        def execute_side_effect(sql: str, *args: Any) -> None:
             nonlocal call_count
             call_count += 1
             if call_count == 1 and "dolt_ignore" in sql:

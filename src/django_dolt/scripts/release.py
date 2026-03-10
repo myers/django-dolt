@@ -20,7 +20,7 @@ NC = "\033[0m"  # No Color
 
 def run_command(
     cmd: list[str], capture_output: bool = True, check: bool = True
-) -> subprocess.CompletedProcess:
+) -> subprocess.CompletedProcess[str]:
     """Run a shell command and return the result."""
     return subprocess.run(cmd, capture_output=capture_output, text=True, check=check)
 
@@ -28,7 +28,7 @@ def run_command(
 def get_current_branch() -> str:
     """Get the current git branch name."""
     result = run_command(["git", "branch", "--show-current"])
-    return result.stdout.strip()
+    return str(result.stdout.strip())
 
 
 def is_working_directory_clean() -> bool:
@@ -114,7 +114,7 @@ def confirm(prompt: str) -> bool:
     return response in ("y", "yes")
 
 
-def main():
+def main() -> None:
     """Main release process."""
     bump_type = sys.argv[1] if len(sys.argv) > 1 else "patch"
 

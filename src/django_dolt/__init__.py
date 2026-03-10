@@ -4,6 +4,7 @@ from typing import Any
 
 # Eagerly import service-layer functions since they don't depend on
 # Django's app registry being ready.
+from django_dolt.decorators import dolt_autocommit, get_author_from_request
 from django_dolt.services import (
     DoltCommitError,
     DoltError,
@@ -84,12 +85,4 @@ def __getattr__(name: str) -> Any:
         from django_dolt.admin import DoltCommitMixin
 
         return DoltCommitMixin
-    if name == "dolt_autocommit":
-        from django_dolt.decorators import dolt_autocommit
-
-        return dolt_autocommit
-    if name == "get_author_from_request":
-        from django_dolt.decorators import get_author_from_request
-
-        return get_author_from_request
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

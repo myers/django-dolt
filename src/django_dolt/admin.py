@@ -5,6 +5,7 @@ Provides an extended admin site with Dolt commit history and pull functionality,
 plus read-only ModelAdmin classes for Dolt system tables.
 """
 
+import logging
 from typing import Any, cast
 
 from django.contrib import admin, messages
@@ -18,6 +19,8 @@ from django_dolt import services
 from django_dolt.decorators import get_author_from_request
 from django_dolt.dolt_databases import get_dolt_databases
 from django_dolt.models import Branch, Commit, Remote
+
+logger = logging.getLogger("django_dolt")
 
 
 def _get_dolt_db_for_model(model: type) -> str | None:
@@ -69,25 +72,23 @@ class DoltCommitMixin:
     def response_add(
         self, request: HttpRequest, obj: Any, post_url_continue: str | None = None
     ) -> HttpResponse:
+        response: HttpResponse = super().response_add(request, obj, post_url_continue)  # type: ignore[misc]
         if "_save_and_commit" in request.POST:
-            response = super().response_add(request, obj, post_url_continue)  # type: ignore[misc]
             self._do_dolt_commit(request, obj)
-            return response
-        return super().response_add(request, obj, post_url_continue)  # type: ignore[misc]
+        return response
 
     def response_change(self, request: HttpRequest, obj: Any) -> HttpResponse:
+        response: HttpResponse = super().response_change(request, obj)  # type: ignore[misc]
         if "_save_and_commit" in request.POST:
-            response = super().response_change(request, obj)  # type: ignore[misc]
             self._do_dolt_commit(request, obj)
-            return response
-        return super().response_change(request, obj)  # type: ignore[misc]
+        return response
 
 
 # Extension registry: db_alias -> extension config dict
-_branch_extensions: dict[str, dict] = {}
+_branch_extensions: dict[str, dict[str, Any]] = {}
 
 
-def register_branch_extension(db_alias: str, extension: dict) -> None:
+def register_branch_extension(db_alias: str, extension: dict[str, Any]) -> None:
     """Register an extension for a database's Branch admin.
 
     Extension dict can contain:
@@ -104,18 +105,7 @@ class DoltAdminMixin:
     def get_urls(self) -> list[URLPattern]:
         """Add Dolt-specific URLs to admin."""
         urls = super().get_urls()  # type: ignore[misc]
-        dolt_urls: list[URLPattern] = [
-            path(
-                "dolt/commits/",
-                self.admin_view(self.dolt_commits_view),  # type: ignore[attr-defined]
-                name="dolt_commits",
-            ),
-            path(
-                "dolt/pull/",
-                self.admin_view(self.dolt_pull_view),  # type: ignore[attr-defined]
-                name="dolt_pull",
-            ),
-        ]
+        dolt_urls: list[URLPattern] = []
         # Add status and diff URLs for each Dolt database
         for db_alias in get_dolt_databases():
             dolt_urls.append(
@@ -133,86 +123,6 @@ class DoltAdminMixin:
                 )
             )
         return dolt_urls + cast(list[URLPattern], urls)
-
-    def dolt_commits_view(self, request: HttpRequest) -> TemplateResponse:
-        """Display Dolt commit history."""
-        commits = []
-        status_info = []
-
-        # Get commit history
-        raw_commits = services.dolt_log(limit=50)
-        for commit in raw_commits:
-            commits.append(
-                {
-                    "hash": commit["commit_hash"][:8],
-                    "full_hash": commit["commit_hash"],
-                    "author": f"{commit['committer']} <{commit['email']}>",
-                    "date": commit["date"],
-                    "message": commit["message"],
-                    "message_lines": commit["message"].split("\n"),
-                }
-            )
-
-        # Get current status (excluding ignored tables)
-        status = services.dolt_status(exclude_ignored=True)
-        for row in status:
-            status_info.append(
-                {
-                    "table": row["table_name"],
-                    "staged": row.get("staged", 0),
-                    "status": row.get("status", ""),
-                }
-            )
-
-        # Get current branch
-        current_branch = services.dolt_current_branch()
-
-        # Get ignored patterns for display
-        ignored_patterns = services.get_ignored_tables()
-
-        context = {
-            **self.each_context(request),  # type: ignore[attr-defined]
-            "title": "Dolt Commit History",
-            "commits": commits,
-            "status": status_info,
-            "current_branch": current_branch,
-            "ignored_patterns": ignored_patterns,
-        }
-        return TemplateResponse(
-            request, "admin/django_dolt/commit_history.html", context
-        )
-
-    def dolt_pull_view(self, request: HttpRequest) -> HttpResponse:
-        """Handle pull from remote."""
-        if request.method == "POST":
-            if not request.user.is_superuser:
-                raise PermissionDenied
-            remote = request.POST.get("remote", "origin")
-            branch = request.POST.get("branch") or None
-
-            try:
-                result = services.dolt_pull(remote, branch)
-                self.message_user(request, f"Pull successful: {result}")  # type: ignore[attr-defined]
-            except services.DoltPullError as e:
-                self.message_user(  # type: ignore[attr-defined]
-                    request,
-                    f"Pull failed: {e}",
-                    level="error",
-                )
-
-            return HttpResponseRedirect(reverse("admin:dolt_commits"))
-
-        # GET request - show pull form
-        current_branch = services.dolt_current_branch()
-        remotes = services.dolt_remotes()
-
-        context = {
-            **self.each_context(request),  # type: ignore[attr-defined]
-            "title": "Pull from Remote",
-            "current_branch": current_branch,
-            "remotes": remotes,
-        }
-        return TemplateResponse(request, "admin/django_dolt/pull.html", context)
 
 
 class DoltMultiDBAdminMixin:
@@ -236,7 +146,7 @@ class DoltMultiDBAdminMixin:
         self, request: HttpRequest, app_label: str | None = None
     ) -> list[dict[str, Any]]:
         """Reorganize Dolt models by database and inject status links."""
-        app_list = super().get_app_list(request, app_label)  # type: ignore[misc]
+        app_list: list[dict[str, Any]] = super().get_app_list(request, app_label)  # type: ignore[misc]
 
         # Find the django_dolt app
         dolt_app = None
@@ -266,18 +176,14 @@ class DoltMultiDBAdminMixin:
 
                 # Create a cleaned model entry with simple name
                 cleaned_model = model.copy()
-                cleaned_model["name"] = (
-                    model_type + "s"
-                    if not model_type.endswith("s")
-                    else model_type + "es"
+                plural_names = {
+                    "Branch": "Branches",
+                    "Commit": "Commits",
+                    "Remote": "Remotes",
+                }
+                cleaned_model["name"] = plural_names.get(
+                    model_type, model_type + "s"
                 )
-                # Use verbose_name_plural if available
-                if "Branches" in str(model.get("name", "")):
-                    cleaned_model["name"] = "Branches"
-                elif "Commits" in str(model.get("name", "")):
-                    cleaned_model["name"] = "Commits"
-                elif "Remotes" in str(model.get("name", "")):
-                    cleaned_model["name"] = "Remotes"
 
                 db_groups[db_suffix].append(cleaned_model)
 
@@ -301,7 +207,9 @@ class DoltMultiDBAdminMixin:
                             },
                         )
                     except Exception:
-                        pass
+                        logger.debug(
+                            "Could not resolve status URL for %s", db_suffix
+                        )
             dolt_apps.append(
                 {
                     "name": f"{db_display} (Dolt)",
@@ -524,16 +432,20 @@ def _make_status_view(db_alias: str) -> Any:
                     kwargs={"table_name": item["table_name"]},
                 )
         except Exception:
+            logger.exception("Failed to get status for %s", db_alias)
+            messages.error(request, f"Could not load status for {db_alias}")
             status = []
 
         try:
             commits = services.dolt_log(limit=10, using=db_alias)
         except Exception:
+            logger.exception("Failed to get log for %s", db_alias)
             commits = []
 
         try:
             current_branch = services.dolt_current_branch(using=db_alias)
         except Exception:
+            logger.exception("Failed to get current branch for %s", db_alias)
             current_branch = "unknown"
 
         db_display = db_alias.replace("_", " ").title()
@@ -561,6 +473,7 @@ def _make_diff_view(db_alias: str) -> Any:
                 "HEAD", "WORKING", table_name, using=db_alias
             )
         except Exception:
+            logger.exception("Failed to get diff for %s.%s", db_alias, table_name)
             diff_rows = []
 
         # Process diff rows: extract column names and highlight changes

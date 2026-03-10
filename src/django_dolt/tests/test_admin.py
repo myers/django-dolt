@@ -7,11 +7,11 @@ from django.contrib.auth.models import User
 from django.test import RequestFactory, TestCase
 
 from django_dolt.admin import (
-    DoltAdminMixin,
     DoltCommitMixin,
     ReadOnlyModelAdmin,
     _make_diff_view,
     _make_status_view,
+    register_default_dolt_admin,
 )
 
 
@@ -65,8 +65,8 @@ class TestDoltCommitMixin(TestCase):
         # Need message middleware
         from django.contrib.messages.storage.fallback import FallbackStorage
 
-        request.session = "session"
-        request._messages = FallbackStorage(request)
+        request.session = "session"  # type: ignore[assignment]
+        request._messages = FallbackStorage(request)  # type: ignore[attr-defined]
 
         mixin = DoltCommitMixin()
         obj = MagicMock()
@@ -115,8 +115,8 @@ class TestMakeStatusView(TestCase):
         request.user = self.superuser
         from django.contrib.messages.storage.fallback import FallbackStorage
 
-        request.session = "session"
-        request._messages = FallbackStorage(request)
+        request.session = "session"  # type: ignore[assignment]
+        request._messages = FallbackStorage(request)  # type: ignore[attr-defined]
 
         response = view(request)
         assert response.status_code == 302
@@ -144,8 +144,8 @@ class TestMakeStatusView(TestCase):
         request.user = self.superuser
         from django.contrib.messages.storage.fallback import FallbackStorage
 
-        request.session = "session"
-        request._messages = FallbackStorage(request)
+        request.session = "session"  # type: ignore[assignment]
+        request._messages = FallbackStorage(request)  # type: ignore[attr-defined]
 
         response = view(request)
         assert response.status_code == 302
@@ -174,27 +174,99 @@ class TestMakeDiffView(TestCase):
 
 
 @pytest.mark.django_db
-class TestDoltAdminMixinPullView(TestCase):
-    """Test DoltAdminMixin.dolt_pull_view permission checks."""
+class TestDoltCommitMixinResponseAdd(TestCase):
+    """Test DoltCommitMixin.response_add with _save_and_commit."""
 
     def setUp(self) -> None:
         self.factory = RequestFactory()
-        self.regular_user = User.objects.create_user(
-            "pulluser", "pulluser@example.com", "password"
+        self.superuser = User.objects.create_superuser(
+            "commitadmin", "commitadmin@example.com", "password"
         )
 
-    def test_pull_post_requires_superuser(self) -> None:
-        """POST to dolt_pull_view should raise PermissionDenied for non-superuser."""
-        from django.contrib.admin import AdminSite
+    @patch("django_dolt.admin.services.dolt_add_and_commit", return_value="abc12345")
+    @patch("django_dolt.admin._get_dolt_db_for_model", return_value="mydb")
+    def test_response_add_with_save_and_commit(
+        self, mock_get_db: MagicMock, mock_commit: MagicMock
+    ) -> None:
+        """response_add triggers commit with _save_and_commit."""
+        from django.contrib import admin
+        from django.contrib.messages.storage.fallback import FallbackStorage
 
-        class TestSite(DoltAdminMixin, AdminSite):
+        class TestModel:
+            pk = 1
+
+            def __str__(self) -> str:
+                return "test"
+
+        class TestAdmin(DoltCommitMixin, admin.ModelAdmin):  # type: ignore[misc, type-arg]
             pass
 
-        site = TestSite()
-        request = self.factory.post("/", {"remote": "origin"})
-        request.user = self.regular_user
+        model_admin = TestAdmin(User, admin.site)
+        request = self.factory.post("/", {"_save_and_commit": "1"})
+        request.user = self.superuser
+        request.session = "session"  # type: ignore[assignment]
+        request._messages = FallbackStorage(request)  # type: ignore[attr-defined]
 
-        from django.core.exceptions import PermissionDenied
+        obj = TestModel()
+        mock_resp = MagicMock(status_code=302)
+        with patch.object(
+            admin.ModelAdmin, "response_add", return_value=mock_resp
+        ):
+            model_admin.response_add(request, obj)
 
-        with pytest.raises(PermissionDenied):
-            site.dolt_pull_view(request)
+        mock_commit.assert_called_once()
+
+    @patch("django_dolt.admin.services.dolt_add_and_commit", return_value="abc12345")
+    @patch("django_dolt.admin._get_dolt_db_for_model", return_value="mydb")
+    def test_response_change_with_save_and_commit(
+        self, mock_get_db: MagicMock, mock_commit: MagicMock
+    ) -> None:
+        """response_change triggers commit with _save_and_commit."""
+        from django.contrib import admin
+        from django.contrib.messages.storage.fallback import FallbackStorage
+
+        class TestModel:
+            pk = 1
+
+            def __str__(self) -> str:
+                return "test"
+
+        class TestAdmin(DoltCommitMixin, admin.ModelAdmin):  # type: ignore[misc, type-arg]
+            pass
+
+        model_admin = TestAdmin(User, admin.site)
+        request = self.factory.post("/", {"_save_and_commit": "1"})
+        request.user = self.superuser
+        request.session = "session"  # type: ignore[assignment]
+        request._messages = FallbackStorage(request)  # type: ignore[attr-defined]
+
+        obj = TestModel()
+        mock_resp = MagicMock(status_code=302)
+        with patch.object(
+            admin.ModelAdmin, "response_change", return_value=mock_resp
+        ):
+            model_admin.response_change(request, obj)
+
+        mock_commit.assert_called_once()
+
+
+@pytest.mark.django_db
+class TestRegisterDefaultDoltAdmin(TestCase):
+    """Test register_default_dolt_admin."""
+
+    def test_registers_three_model_admins(self) -> None:
+        from django.contrib import admin as django_admin
+
+        from django_dolt.models import Branch, Commit, Remote
+
+        # Use a fresh AdminSite to avoid conflicts with the default site
+        site = django_admin.AdminSite()
+        with patch("django_dolt.admin.admin") as mock_admin_module:
+            mock_admin_module.site = site
+            mock_admin_module.ModelAdmin = django_admin.ModelAdmin
+            mock_admin_module.display = django_admin.display
+            register_default_dolt_admin()
+
+        assert Branch in site._registry
+        assert Commit in site._registry
+        assert Remote in site._registry

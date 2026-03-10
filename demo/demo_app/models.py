@@ -5,6 +5,8 @@ This module defines models for two separate Dolt databases:
 - Order models (orders): Customers and orders
 """
 
+from decimal import Decimal
+
 from django.db import models
 
 
@@ -146,6 +148,6 @@ class OrderItem(models.Model):
         return f"{self.quantity}x {self.product_name}"
 
     @property
-    def subtotal(self) -> float:
+    def subtotal(self) -> Decimal:
         """Calculate subtotal for this line item."""
-        return float(self.quantity * self.unit_price)
+        return self.quantity * self.unit_price

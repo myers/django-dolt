@@ -260,7 +260,7 @@ class TestDoltAutocommit:
             wrapped(auth_request)
 
     def test_preserves_function_metadata(self) -> None:
-        @dolt_autocommit(using="inventory")
+        @dolt_autocommit(using="inventory")  # type: ignore[untyped-decorator]
         def my_named_view(request: HttpRequest) -> HttpResponse:
             """My docstring."""
             return HttpResponse("ok")

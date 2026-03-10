@@ -6,18 +6,13 @@ for introspection of branches, commits, and remotes.
 
 from typing import TYPE_CHECKING, Any
 
-from django.db import connection as default_connection
-from django.db import connections, models
+from django.db import models
+
+from django_dolt.services import _get_connection
 
 if TYPE_CHECKING:
     # Type for the tuple of proxy model classes - use Any for dynamic classes
     type ProxyModelTuple = tuple[type[Any], type[Any], type[Any]]
-
-
-def _conn(using: str | None = None) -> Any:
-    if using is None:
-        return default_connection
-    return connections[using]
 
 
 class BranchManager(models.Manager["Branch"]):
@@ -30,7 +25,7 @@ class BranchManager(models.Manager["Branch"]):
 
     def active_branch(self, *, using: str | None = None) -> str:
         """Return the currently active branch name."""
-        conn = _conn(using)
+        conn = _get_connection(using)
         with conn.cursor() as cursor:
             cursor.execute("SELECT active_branch()")
             result = cursor.fetchone()
@@ -44,7 +39,7 @@ class CommitManager(models.Manager["Commit"]):
         self, limit: int = 50, *, using: str | None = None
     ) -> list[dict[str, Any]]:
         """Return recent commits as dicts."""
-        conn = _conn(using)
+        conn = _get_connection(using)
         with conn.cursor() as cursor:
             cursor.execute(
                 "SELECT commit_hash, committer, email, "
@@ -73,7 +68,7 @@ class StatusManager(models.Manager["Status"]):
         from django_dolt.services import DoltError
 
         try:
-            conn = _conn(using)
+            conn = _get_connection(using)
             with conn.cursor() as cursor:
                 if exclude_ignored:
                     try:
@@ -111,7 +106,7 @@ class IgnoreManager(models.Manager["Ignore"]):
 
     def patterns(self, *, using: str | None = None) -> list[str]:
         """Return ignored table patterns."""
-        conn = _conn(using)
+        conn = _get_connection(using)
         with conn.cursor() as cursor:
             cursor.execute(
                 "SELECT pattern FROM dolt_ignore WHERE ignored = 1"
@@ -126,7 +121,7 @@ class RemoteManager(models.Manager["Remote"]):
         self, *, using: str | None = None
     ) -> list[dict[str, Any]]:
         """Return all remotes as dicts."""
-        conn = _conn(using)
+        conn = _get_connection(using)
         with conn.cursor() as cursor:
             cursor.execute("SELECT * FROM dolt_remotes")
             columns = [

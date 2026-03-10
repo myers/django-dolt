@@ -1,11 +1,16 @@
 """Tests for multi-database support."""
 
 from collections.abc import Generator
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 from django.db import connections
 
+from django_dolt.admin import (
+    DoltMultiDBAdminMixin,
+    _branch_extensions,
+    register_branch_extension,
+)
 from django_dolt.dolt_databases import (
     get_dolt_databases,
     reset_dolt_databases,
@@ -111,7 +116,7 @@ class TestProxyModelFactory:
 @pytest.fixture()
 def multi_dolt_dbs(django_db_blocker: object) -> Generator[list[str], None, None]:
     """Create two fresh test databases, return aliases."""
-    with django_db_blocker.unblock():  # type: ignore[union-attr]
+    with django_db_blocker.unblock():  # type: ignore[attr-defined]
         conn = connections["dolt"]
         for db_name in ("test_dolt1", "test_dolt2"):
             with conn.cursor() as cursor:
@@ -189,3 +194,83 @@ class TestMultiDatabaseIntegration:
         tables2 = [r["table_name"] for r in status2]
         assert "only_in_db1" in tables1
         assert "only_in_db1" not in tables2
+
+
+class TestDoltMultiDBAdminMixin:
+    """Test DoltMultiDBAdminMixin.get_app_list sidebar regrouping."""
+
+    def test_get_app_list_regroups_by_database(self) -> None:
+        """Dolt models should be regrouped into per-database sections."""
+        from django.contrib.admin import AdminSite
+
+        class TestSite(DoltMultiDBAdminMixin, AdminSite):
+            pass
+
+        site = TestSite()
+
+        # Build a fake app_list that super().get_app_list() would return
+        fake_app_list = [
+            {
+                "app_label": "django_dolt",
+                "app_url": "/admin/django_dolt/",
+                "has_module_perms": True,
+                "models": [
+                    {"object_name": "Branch_inventory", "name": "Branches (Inventory)"},
+                    {"object_name": "Commit_inventory", "name": "Commits (Inventory)"},
+                    {"object_name": "Remote_inventory", "name": "Remotes (Inventory)"},
+                    {"object_name": "Branch_orders", "name": "Branches (Orders)"},
+                    {"object_name": "Commit_orders", "name": "Commits (Orders)"},
+                ],
+            }
+        ]
+
+        dbs = ["inventory", "orders"]
+        with (
+            patch.object(
+                AdminSite, "get_app_list", return_value=fake_app_list
+            ),
+            patch(
+                "django_dolt.admin.get_dolt_databases", return_value=dbs
+            ),
+            patch(
+                "django_dolt.admin.reverse",
+                side_effect=Exception("no url"),
+            ),
+        ):
+            request = MagicMock()
+            result = site.get_app_list(request)
+
+        # Should have 2 app sections (inventory, orders)
+        assert len(result) == 2
+        app_names = [a["name"] for a in result]
+        assert "Inventory (Dolt)" in app_names
+        assert "Orders (Dolt)" in app_names
+
+        # Check that model names are cleaned up
+        inv_app = next(a for a in result if "Inventory" in a["name"])
+        model_names = [m["name"] for m in inv_app["models"]]
+        assert "Branches" in model_names
+        assert "Commits" in model_names
+        assert "Remotes" in model_names
+
+
+class TestRegisterBranchExtension:
+    """Test register_branch_extension."""
+
+    def teardown_method(self) -> None:
+        _branch_extensions.pop("test_ext_db", None)
+
+    def test_registers_extension(self) -> None:
+        ext = {
+            "get_extra_urls": lambda ma: [],
+            "changelist_template": "my_template.html",
+        }
+        register_branch_extension("test_ext_db", ext)
+        assert _branch_extensions["test_ext_db"] is ext
+
+    def test_extension_overwritten_on_re_register(self) -> None:
+        ext1 = {"changelist_template": "t1.html"}
+        ext2 = {"changelist_template": "t2.html"}
+        register_branch_extension("test_ext_db", ext1)
+        register_branch_extension("test_ext_db", ext2)
+        assert _branch_extensions["test_ext_db"] is ext2

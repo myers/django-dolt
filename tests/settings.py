@@ -2,7 +2,7 @@
 
 import os
 
-import pymysql
+import pymysql  # type: ignore[import-untyped]
 
 pymysql.install_as_MySQLdb()
 # Django 6.0 requires mysqlclient 2.2.1+; pymysql reports 1.4.6.

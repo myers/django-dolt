@@ -102,6 +102,9 @@ DATABASES = {
 # Database routing for demo models
 DATABASE_ROUTERS = ["demo.routers.DemoRouter"]
 
+# Dolt databases to manage via django-dolt
+DOLT_DATABASES = ["inventory", "orders"]
+
 AUTH_PASSWORD_VALIDATORS = [
     {
         "NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator",

@@ -89,8 +89,14 @@ def orders_dashboard(request: HttpRequest) -> HttpResponse:
     return render(request, "demo_app/orders.html", context)
 
 
+@login_required
 def dolt_commit(request: HttpRequest, db_alias: str) -> HttpResponse:
     """Commit changes to a Dolt database."""
+    if db_alias not in django_dolt.get_dolt_databases():
+        from django.http import Http404
+
+        raise Http404(f"Unknown database: {db_alias}")
+
     if request.method != "POST":
         return HttpResponseRedirect(reverse("index"))
 

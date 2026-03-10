@@ -111,31 +111,3 @@ def django_db_setup(
 
     with django_db_blocker.unblock():  # type: ignore[union-attr]
         teardown_databases(db_cfg, verbosity=request.config.option.verbose)
-
-
-@pytest.fixture()
-def dolt_databases() -> Generator[list[str], None, None]:
-    """Create two test databases in the Dolt server.
-
-    Yields:
-        List of test database aliases.
-    """
-    from django.db import connections
-
-    conn = connections["dolt"]
-    with conn.cursor() as cursor:
-        cursor.execute("DROP DATABASE IF EXISTS test_dolt1")
-        cursor.execute("DROP DATABASE IF EXISTS test_dolt2")
-        cursor.execute("CREATE DATABASE test_dolt1")
-        cursor.execute("CREATE DATABASE test_dolt2")
-
-    for alias in ("dolt1", "dolt2"):
-        connections[alias].close()
-
-    yield ["dolt1", "dolt2"]
-
-    for alias in ("dolt1", "dolt2"):
-        connections[alias].close()
-    with conn.cursor() as cursor:
-        cursor.execute("DROP DATABASE IF EXISTS test_dolt1")
-        cursor.execute("DROP DATABASE IF EXISTS test_dolt2")
