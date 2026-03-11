@@ -17,8 +17,8 @@ bin/test                           # Run all tests (auto-starts Dolt Docker cont
 bin/test src/django_dolt/tests/test_services.py
 bin/test src/django_dolt/tests/test_services.py::TestDoltCommit::test_commit_with_changes
 
-mypy src/django_dolt               # Type checking (strict mode, django-stubs)
-ruff check src/django_dolt         # Linting
+uv run mypy src/django_dolt               # Type checking (strict mode, django-stubs)
+uv run ruff check src/django_dolt         # Linting
 ```
 
 Tests require Docker. The `conftest.py` automatically runs `docker compose up -d` to start a Dolt SQL server on port 8906 and tears it down after. If the container is already running, it reuses it.
@@ -65,6 +65,20 @@ Every function accepts `using: str | None = None`. The `DOLT_DATABASES` setting 
 - `tests/conftest.py`: Manages Docker lifecycle, overrides `django_db_setup` to only create SQLite DB
 - `dolt_db` fixture in `test_services.py`: Creates/drops a fresh database per test, rewires a connection alias
 - Mock-based tests patch at the `django_dolt.models` level (e.g., `@patch("django_dolt.models.dolt_push")`)
+
+### Design decisions (do not "fix" these)
+
+- **`BranchManager.active_branch()` returns `"main"` when no result** — This is a safe default. `SELECT active_branch()` always returns a row in practice; the fallback exists only as a defensive measure and should not be changed to raise or return `None`.
+- **Repeated `using if using is not None else "default"` in `models.py`** — This pattern appears in every stored-procedure function. We prefer the explicit inline form over a helper function because it keeps each function self-contained and easy to read in isolation.
+- **`register_dolt_admin()` does not guard against double-registration** — Calling it twice for the same `db_alias` on the same admin site will raise Django's `AlreadyRegistered`. This is the caller's responsibility, same as `admin.site.register()`. Don't add a try/except around it.
+- **`dolt_add_and_commit()` only supports stage-all (`-A`)** — There is no `table` parameter. To commit specific tables, use `dolt_add()` + `dolt_commit()` separately. This keeps the atomic path simple and avoids partial-failure states.
+- **`dolt_autocommit` lets commit exceptions propagate** — This is intentional. A commit failure after a successful view is a real error. `DoltCommitMixin` catches exceptions for the admin UI, but the view decorator does not.
+
+## Settings
+
+- `DOLT_DATABASES` — List of database aliases that are Dolt databases
+- `DOLT_ADMIN_EXCLUDE` — List of database aliases to skip during auto-registration
+- `DOLT_AUTO_REGISTER_ADMIN` — Set to `False` to disable auto-registration on `admin.site` during `ready()`. Use this when providing a custom admin site (like `DoltAdminSite`) to avoid double-registration.
 
 ## Environment Variables
 

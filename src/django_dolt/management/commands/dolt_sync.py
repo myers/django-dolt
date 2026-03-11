@@ -2,10 +2,10 @@
 Django management command to sync Dolt database - commit and push changes.
 """
 
-from datetime import datetime
 from typing import Any
 
 from django.core.management.base import BaseCommand, CommandParser
+from django.utils import timezone
 
 from django_dolt import services
 
@@ -80,7 +80,7 @@ class Command(BaseCommand):
 
         # Create commit message if not provided
         if message is None:
-            timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            timestamp = timezone.now().strftime("%Y-%m-%d %H:%M:%S")
             message = f"Database update at {timestamp}"
 
         if tables:

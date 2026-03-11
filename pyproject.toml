@@ -27,7 +27,12 @@ classifiers = [
     "Topic :: Database",
     "Topic :: Software Development :: Version Control",
 ]
-dependencies = ["django>=5.0"]
+dependencies = [
+    "django>=5.0",
+    # A MySQL client library is required at runtime (mysqlclient or pymysql).
+    # Not declared here because the choice is user's — Dolt speaks the MySQL
+    # wire protocol so any Django-compatible MySQL backend works.
+]
 
 [project.urls]
 Homepage = "https://github.com/myers/django-dolt"

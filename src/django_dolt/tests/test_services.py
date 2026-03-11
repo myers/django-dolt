@@ -1,7 +1,6 @@
 """Tests for django_dolt.services module against a real Dolt database."""
 
 from collections.abc import Generator
-from typing import Any
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -175,15 +174,14 @@ class TestDoltAddAndCommit:
         result = services.dolt_add_and_commit("no changes", using=dolt_db)
         assert result is None
 
-    def test_add_and_commit_specific_table(self, dolt_db: str) -> None:
-        """When a specific table is given, falls back to add+commit pair."""
+    def test_add_and_commit_stages_new_tables(self, dolt_db: str) -> None:
+        """Stage-all should pick up newly created tables."""
         conn = connections[dolt_db]
         with conn.cursor() as cursor:
-            cursor.execute("CREATE TABLE test_specific (id INT PRIMARY KEY)")
+            cursor.execute("CREATE TABLE test_new_tbl (id INT PRIMARY KEY)")
+            cursor.execute("INSERT INTO test_new_tbl VALUES (1)")
 
-        result = services.dolt_add_and_commit(
-            "specific table", table="test_specific", using=dolt_db
-        )
+        result = services.dolt_add_and_commit("new table test", using=dolt_db)
         assert result is not None
 
 

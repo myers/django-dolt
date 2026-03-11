@@ -11,8 +11,16 @@ class DjangoDoltConfig(AppConfig):
     default_auto_field = "django.db.models.BigAutoField"
 
     def ready(self) -> None:
-        """Register admin classes for each discovered Dolt database."""
+        """Register admin classes for each discovered Dolt database.
+
+        Set ``DOLT_AUTO_REGISTER_ADMIN = False`` in settings to disable
+        auto-registration on ``admin.site`` (e.g. when using a custom
+        admin site like ``DoltAdminSite`` that registers models itself).
+        """
         from django.conf import settings
+
+        if not getattr(settings, "DOLT_AUTO_REGISTER_ADMIN", True):
+            return
 
         from django_dolt.admin import register_dolt_admin
         from django_dolt.dolt_databases import get_dolt_databases

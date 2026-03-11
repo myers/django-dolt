@@ -192,22 +192,26 @@ class StatusManager(models.Manager["Status"]):
     ) -> list[dict[str, Any]]:
         """Return current working-set status rows.
 
-        The ``exclude_ignored`` filter uses a ``NOT EXISTS`` subquery
-        with ``LIKE`` matching against ``dolt_ignore``, which cannot
-        be cleanly expressed in the ORM, so raw SQL is used here.
+        When ``exclude_ignored`` is True, a ``NOT EXISTS`` subquery
+        with ``LIKE`` matching against ``dolt_ignore`` is used, which
+        cannot be cleanly expressed in the ORM, so raw SQL is required.
         """
+        if not exclude_ignored:
+            qs = self.using(using) if using else self.all()
+            return cast(
+                list[dict[str, Any]],
+                list(qs.values("table_name", "staged", "status")),
+            )
+
         with connections[using if using is not None else "default"].cursor() as cursor:
-            if exclude_ignored:
-                cursor.execute("""
-                    SELECT s.* FROM dolt_status s
-                    WHERE NOT EXISTS (
-                        SELECT 1 FROM dolt_ignore i
-                        WHERE i.ignored = 1
-                        AND s.table_name LIKE i.pattern
-                    )
-                """)
-            else:
-                cursor.execute("SELECT * FROM dolt_status")
+            cursor.execute("""
+                SELECT s.* FROM dolt_status s
+                WHERE NOT EXISTS (
+                    SELECT 1 FROM dolt_ignore i
+                    WHERE i.ignored = 1
+                    AND s.table_name LIKE i.pattern
+                )
+            """)
             columns = [
                 col[0] for col in cursor.description or []
             ]

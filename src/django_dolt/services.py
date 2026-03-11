@@ -74,25 +74,20 @@ def dolt_commit(
 
 def dolt_add_and_commit(
     message: str,
-    table: str = ".",
     author: str = "Django <django@localhost>",
     *,
     using: str | None = None,
 ) -> str | None:
-    """Stage and commit changes in a single atomic operation.
+    """Stage all changes and commit in a single atomic operation.
 
     Uses ``DOLT_COMMIT('-A', ...)`` to stage all tables (including new
     ones) and commit in one call, avoiding race conditions between
     separate add and commit steps.
 
-    When *table* is not ``"."``, falls back to an explicit
-    ``dolt_add`` + ``dolt_commit`` pair for that specific table.
+    To commit specific tables, use ``dolt_add()`` + ``dolt_commit()``
+    separately instead.
     """
     from django_dolt import models
-
-    if table != ".":
-        dolt_add(table, using=using)
-        return dolt_commit(message, author, using=using)
 
     try:
         return models.dolt_commit(

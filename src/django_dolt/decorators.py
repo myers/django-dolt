@@ -51,6 +51,13 @@ def dolt_autocommit(
         def my_view(request):
             ...
 
+    Exceptions from ``dolt_add_and_commit`` are intentionally **not**
+    caught — they propagate to Django's error handling. This is by
+    design: a commit failure after a successful view is a genuine error
+    that should be visible, not silently swallowed. If you need
+    fault-tolerant commits, wrap the view or use ``DoltCommitMixin``
+    (which does catch exceptions and shows admin messages instead).
+
     Args:
         using: Database alias(es) to commit to. ``None`` commits to all
             detected Dolt databases that have uncommitted changes.
