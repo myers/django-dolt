@@ -4,17 +4,138 @@ These are read-only, unmanaged models that map to Dolt's built-in system tables
 for introspection of branches, commits, and remotes.
 """
 
-from __future__ import annotations
+from typing import TYPE_CHECKING, Any
 
-from typing import TYPE_CHECKING
-
-from django.db import models
+from django.db import connection as default_connection
+from django.db import connections, models
 
 if TYPE_CHECKING:
-    from typing import Any
-
     # Type for the tuple of proxy model classes - use Any for dynamic classes
     type ProxyModelTuple = tuple[type[Any], type[Any], type[Any]]
+
+
+def _conn(using: str | None = None) -> Any:
+    if using is None:
+        return default_connection
+    return connections[using]
+
+
+class BranchManager(models.Manager["Branch"]):
+    """Manager for dolt_branches system table."""
+
+    def names(self, *, using: str | None = None) -> list[str]:
+        """Return list of branch names."""
+        qs = self.using(using) if using else self.all()
+        return list(qs.values_list("name", flat=True))
+
+    def active_branch(self, *, using: str | None = None) -> str:
+        """Return the currently active branch name."""
+        conn = _conn(using)
+        with conn.cursor() as cursor:
+            cursor.execute("SELECT active_branch()")
+            result = cursor.fetchone()
+            return str(result[0]) if result else "main"
+
+
+class CommitManager(models.Manager["Commit"]):
+    """Manager for dolt_log system table."""
+
+    def recent(
+        self, limit: int = 50, *, using: str | None = None
+    ) -> list[dict[str, Any]]:
+        """Return recent commits as dicts."""
+        conn = _conn(using)
+        with conn.cursor() as cursor:
+            cursor.execute(
+                "SELECT commit_hash, committer, email, "
+                "date, message FROM dolt_log LIMIT %s",
+                [limit],
+            )
+            columns = [
+                col[0] for col in cursor.description or []
+            ]
+            return [
+                dict(zip(columns, row, strict=False))
+                for row in cursor.fetchall()
+            ]
+
+
+class StatusManager(models.Manager["Status"]):
+    """Manager for dolt_status system table."""
+
+    def current(
+        self,
+        exclude_ignored: bool = True,
+        *,
+        using: str | None = None,
+    ) -> list[dict[str, Any]]:
+        """Return current working-set status rows."""
+        from django_dolt.services import DoltError
+
+        try:
+            conn = _conn(using)
+            with conn.cursor() as cursor:
+                if exclude_ignored:
+                    try:
+                        cursor.execute("""
+                            SELECT s.* FROM dolt_status s
+                            WHERE NOT EXISTS (
+                                SELECT 1 FROM dolt_ignore i
+                                WHERE i.ignored = 1
+                                AND s.table_name LIKE i.pattern
+                            )
+                        """)
+                    except Exception:
+                        cursor.execute(
+                            "SELECT * FROM dolt_status"
+                        )
+                else:
+                    cursor.execute("SELECT * FROM dolt_status")
+                columns = [
+                    col[0] for col in cursor.description or []
+                ]
+                return [
+                    dict(zip(columns, row, strict=False))
+                    for row in cursor.fetchall()
+                ]
+        except DoltError:
+            raise
+        except Exception as e:
+            raise DoltError(
+                f"Failed to get status: {e}"
+            ) from e
+
+
+class IgnoreManager(models.Manager["Ignore"]):
+    """Manager for dolt_ignore system table."""
+
+    def patterns(self, *, using: str | None = None) -> list[str]:
+        """Return ignored table patterns."""
+        conn = _conn(using)
+        with conn.cursor() as cursor:
+            cursor.execute(
+                "SELECT pattern FROM dolt_ignore WHERE ignored = 1"
+            )
+            return [str(row[0]) for row in cursor.fetchall()]
+
+
+class RemoteManager(models.Manager["Remote"]):
+    """Manager for dolt_remotes system table."""
+
+    def all_remotes(
+        self, *, using: str | None = None
+    ) -> list[dict[str, Any]]:
+        """Return all remotes as dicts."""
+        conn = _conn(using)
+        with conn.cursor() as cursor:
+            cursor.execute("SELECT * FROM dolt_remotes")
+            columns = [
+                col[0] for col in cursor.description or []
+            ]
+            return [
+                dict(zip(columns, row, strict=False))
+                for row in cursor.fetchall()
+            ]
 
 
 class Branch(models.Model):
@@ -26,6 +147,8 @@ class Branch(models.Model):
     latest_committer_email = models.CharField(max_length=255)
     latest_commit_date = models.DateTimeField()
     latest_commit_message = models.TextField()
+
+    objects = BranchManager()
 
     class Meta:
         managed = False
@@ -46,6 +169,8 @@ class Commit(models.Model):
     date = models.DateTimeField()
     message = models.TextField()
 
+    objects = CommitManager()
+
     class Meta:
         managed = False
         db_table = "dolt_log"
@@ -56,6 +181,37 @@ class Commit(models.Model):
         return f"{self.commit_hash[:8]} - {self.message[:50]}"
 
 
+class Status(models.Model):
+    """Read-only model for dolt_status system table."""
+
+    table_name = models.CharField(max_length=255, primary_key=True)
+    staged = models.BooleanField()
+    status = models.CharField(max_length=64)
+
+    objects = StatusManager()
+
+    class Meta:
+        managed = False
+        db_table = "dolt_status"
+        verbose_name = "Status"
+        verbose_name_plural = "Status"
+
+
+class Ignore(models.Model):
+    """Read-only model for dolt_ignore system table."""
+
+    pattern = models.CharField(max_length=255, primary_key=True)
+    ignored = models.BooleanField()
+
+    objects = IgnoreManager()
+
+    class Meta:
+        managed = False
+        db_table = "dolt_ignore"
+        verbose_name = "Ignore Rule"
+        verbose_name_plural = "Ignore Rules"
+
+
 class Remote(models.Model):
     """Read-only model for dolt_remotes system table."""
 
@@ -63,6 +219,8 @@ class Remote(models.Model):
     url = models.CharField(max_length=1024)
     fetch_specs = models.JSONField(null=True)
     params = models.JSONField(null=True)
+
+    objects = RemoteManager()
 
     class Meta:
         managed = False
@@ -75,10 +233,10 @@ class Remote(models.Model):
 
 
 # Registry for dynamically created proxy models
-_proxy_model_registry: dict[str, ProxyModelTuple] = {}
+_proxy_model_registry: dict[str, "ProxyModelTuple"] = {}
 
 
-def create_proxy_models(db_alias: str) -> ProxyModelTuple:
+def create_proxy_models(db_alias: str) -> "ProxyModelTuple":
     """Create proxy models for a specific database.
 
     Creates database-specific proxy models that can be registered separately
@@ -165,7 +323,7 @@ def create_proxy_models(db_alias: str) -> ProxyModelTuple:
     return result
 
 
-def get_proxy_models(db_alias: str) -> ProxyModelTuple | None:
+def get_proxy_models(db_alias: str) -> "ProxyModelTuple | None":
     """Get previously created proxy models for a database.
 
     Args:

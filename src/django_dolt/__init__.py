@@ -1,9 +1,9 @@
 """Django integration for Dolt version-controlled databases."""
 
-from __future__ import annotations
-
 from typing import Any
 
+# Eagerly import service-layer functions since they don't depend on
+# Django's app registry being ready.
 from django_dolt.services import (
     DoltCommitError,
     DoltError,
@@ -22,12 +22,13 @@ from django_dolt.services import (
     dolt_push,
     dolt_remotes,
     dolt_status,
+    format_status_rows,
     get_ignored_tables,
 )
 
 __version__ = "1.0.0"
 __all__ = [
-    # Models (lazy-loaded)
+    # Models (lazy-loaded to avoid AppRegistryNotReady)
     "Branch",
     "Commit",
     "Remote",
@@ -54,6 +55,7 @@ __all__ = [
     "dolt_add_remote",
     # Utilities
     "get_ignored_tables",
+    "format_status_rows",
     "get_dolt_databases",
     # View decorator
     "dolt_autocommit",
@@ -61,12 +63,11 @@ __all__ = [
     # Admin extension
     "register_branch_extension",
     "DoltCommitMixin",
-    "register_dolt_status_view",
 ]
 
 
 def __getattr__(name: str) -> Any:
-    """Lazy import for models and utilities to avoid AppRegistryNotReady errors."""
+    """Lazy import for models and admin classes to avoid AppRegistryNotReady errors."""
     if name in ("Branch", "Commit", "Remote"):
         from django.apps import apps
 
@@ -83,10 +84,6 @@ def __getattr__(name: str) -> Any:
         from django_dolt.admin import DoltCommitMixin
 
         return DoltCommitMixin
-    if name == "register_dolt_status_view":
-        from django_dolt.admin import register_dolt_status_view
-
-        return register_dolt_status_view
     if name == "dolt_autocommit":
         from django_dolt.decorators import dolt_autocommit
 

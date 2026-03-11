@@ -1,7 +1,5 @@
 """Tests for django_dolt.models and admin integration."""
 
-from __future__ import annotations
-
 from unittest.mock import MagicMock
 
 import pytest
@@ -119,16 +117,12 @@ class TestCommitAdmin:
         result = admin_instance.hash_short(commit)
         assert result == "abc123de"
 
-    def test_message_preview_short_message(
-        self, admin_instance: CommitAdmin
-    ) -> None:
+    def test_message_preview_short_message(self, admin_instance: CommitAdmin) -> None:
         commit = Commit(message="Short message")
         result = admin_instance.message_preview(commit)
         assert result == "Short message"
 
-    def test_message_preview_long_message(
-        self, admin_instance: CommitAdmin
-    ) -> None:
+    def test_message_preview_long_message(self, admin_instance: CommitAdmin) -> None:
         commit = Commit(message="A" * 100)
         result = admin_instance.message_preview(commit)
         assert result == "A" * 60 + "..."

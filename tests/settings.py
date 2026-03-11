@@ -72,3 +72,5 @@ TEMPLATES = [
 ]
 
 USE_TZ = True
+
+DOLT_DATABASES = ["dolt", "dolt1", "dolt2"]

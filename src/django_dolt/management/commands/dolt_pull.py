@@ -2,8 +2,6 @@
 Django management command to pull changes from Dolt remote.
 """
 
-from __future__ import annotations
-
 from typing import Any
 
 from django.core.management.base import BaseCommand, CommandParser
@@ -38,7 +36,7 @@ class Command(BaseCommand):
             "--user",
             type=str,
             default=None,
-            help="Remote username for authentication (default: DOLT_REMOTE_USER env var)",
+            help="Remote username for auth (default: DOLT_REMOTE_USER env)",
         )
         parser.add_argument(
             "--database",
@@ -70,7 +68,9 @@ class Command(BaseCommand):
         else:
             self.stdout.write(f"Pulling {target_branch} from {remote}...")
             try:
-                result = services.dolt_pull(remote, target_branch, user=user, using=using)
+                result = services.dolt_pull(
+                    remote, target_branch, user=user, using=using
+                )
                 self.stdout.write(self.style.SUCCESS(result))
             except services.DoltPullError as e:
                 self.stdout.write(self.style.ERROR(f"Pull failed: {e}"))

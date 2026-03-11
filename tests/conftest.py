@@ -1,7 +1,5 @@
 """Pytest configuration for django-dolt tests."""
 
-from __future__ import annotations
-
 import os
 import subprocess
 import time
@@ -94,7 +92,7 @@ def django_db_setup(
     request: pytest.FixtureRequest,
     django_test_environment: None,
     django_db_blocker: object,
-) -> None:
+) -> Generator[None, None, None]:
     """Override pytest-django's db setup.
 
     Only creates the SQLite default database. Dolt databases are managed

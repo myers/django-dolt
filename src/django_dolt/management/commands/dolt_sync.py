@@ -2,8 +2,6 @@
 Django management command to sync Dolt database - commit and push changes.
 """
 
-from __future__ import annotations
-
 from datetime import datetime
 from typing import Any
 
@@ -60,21 +58,21 @@ class Command(BaseCommand):
         no_push: bool = options["no_push"]
         author: str = options["author"]
         tables: list[str] | None = options.get("tables")
-        self._using: str | None = options["database"]
+        using: str | None = options["database"]
 
         self.stdout.write("Checking for uncommitted changes...")
 
-        status = services.dolt_status(exclude_ignored=True, using=self._using)
+        status = services.dolt_status(exclude_ignored=True, using=using)
 
         if not status:
             self.stdout.write("No changes to commit")
 
             if not no_push:
-                self._try_push(force)
+                self._try_push(force, using)
             return
 
         self.stdout.write("Found changes to commit:")
-        self.stdout.write(self._format_status(status))
+        self.stdout.write(services.format_status_rows(status))
 
         self.stdout.write("\nCommitting changes...")
         if message:
@@ -86,7 +84,7 @@ class Command(BaseCommand):
         # Stage tables
         for table in tables_to_stage:
             try:
-                services.dolt_add(table, using=self._using)
+                services.dolt_add(table, using=using)
                 self.stdout.write(f"  Staged: {table}")
             except services.DoltError as e:
                 self.stdout.write(f"  Note: Could not stage {table}: {e}")
@@ -98,7 +96,7 @@ class Command(BaseCommand):
 
         # Commit
         try:
-            commit_hash = services.dolt_commit(message, author=author, using=self._using)
+            commit_hash = services.dolt_commit(message, author=author, using=using)
             if commit_hash:
                 self.stdout.write(
                     self.style.SUCCESS(
@@ -113,29 +111,16 @@ class Command(BaseCommand):
             return
 
         if not no_push:
-            self._try_push(force)
+            self._try_push(force, using)
 
-    def _try_push(self, force: bool) -> None:
+    def _try_push(self, force: bool, using: str | None) -> None:
         """Attempt to push to remote."""
         self.stdout.write("\nPushing to remote...")
         if force:
             self.stdout.write("   Using --force flag")
 
         try:
-            result = services.dolt_push(force=force, using=self._using)
+            result = services.dolt_push(force=force, using=using)
             self.stdout.write(self.style.SUCCESS(f"Success: {result}"))
         except services.DoltPushError as e:
             self.stdout.write(self.style.ERROR(f"Push failed: {e}"))
-
-    def _format_status(self, status_rows: list[dict[str, Any]]) -> str:
-        """Format dolt_status output for display."""
-        if not status_rows:
-            return "No changes"
-
-        output = []
-        for row in status_rows:
-            staged = "staged" if row.get("staged", 0) else "modified"
-            table = row.get("table_name", "unknown")
-            status = row.get("status", "")
-            output.append(f"  {staged}: {table} ({status})")
-        return "\n".join(output)

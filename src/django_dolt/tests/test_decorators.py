@@ -1,7 +1,5 @@
 """Tests for django_dolt.decorators module."""
 
-from __future__ import annotations
-
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -83,7 +81,10 @@ class TestDoltAutocommit:
     @patch("django_dolt.decorators.services.dolt_status")
     @patch("django_dolt.decorators.get_dolt_databases")
     def test_commits_when_changes_exist(
-        self, mock_dbs: MagicMock, mock_status: MagicMock, mock_commit: MagicMock,
+        self,
+        mock_dbs: MagicMock,
+        mock_status: MagicMock,
+        mock_commit: MagicMock,
         auth_request: HttpRequest,
     ) -> None:
         mock_dbs.return_value = ["inventory"]
@@ -104,7 +105,10 @@ class TestDoltAutocommit:
     @patch("django_dolt.decorators.services.dolt_status")
     @patch("django_dolt.decorators.get_dolt_databases")
     def test_skips_when_no_changes(
-        self, mock_dbs: MagicMock, mock_status: MagicMock, mock_commit: MagicMock,
+        self,
+        mock_dbs: MagicMock,
+        mock_status: MagicMock,
+        mock_commit: MagicMock,
         auth_request: HttpRequest,
     ) -> None:
         mock_dbs.return_value = ["inventory"]
@@ -119,7 +123,10 @@ class TestDoltAutocommit:
     @patch("django_dolt.decorators.services.dolt_status")
     @patch("django_dolt.decorators.get_dolt_databases")
     def test_skips_on_error_response(
-        self, mock_dbs: MagicMock, mock_status: MagicMock, mock_commit: MagicMock,
+        self,
+        mock_dbs: MagicMock,
+        mock_status: MagicMock,
+        mock_commit: MagicMock,
         auth_request: HttpRequest,
     ) -> None:
         mock_dbs.return_value = ["inventory"]
@@ -135,7 +142,10 @@ class TestDoltAutocommit:
     @patch("django_dolt.decorators.services.dolt_status")
     @patch("django_dolt.decorators.get_dolt_databases")
     def test_commits_on_redirect(
-        self, mock_dbs: MagicMock, mock_status: MagicMock, mock_commit: MagicMock,
+        self,
+        mock_dbs: MagicMock,
+        mock_status: MagicMock,
+        mock_commit: MagicMock,
         auth_request: HttpRequest,
     ) -> None:
         mock_dbs.return_value = ["inventory"]
@@ -150,7 +160,9 @@ class TestDoltAutocommit:
     @patch("django_dolt.decorators.services.dolt_add_and_commit")
     @patch("django_dolt.decorators.services.dolt_status")
     def test_using_single_db(
-        self, mock_status: MagicMock, mock_commit: MagicMock,
+        self,
+        mock_status: MagicMock,
+        mock_commit: MagicMock,
         auth_request: HttpRequest,
     ) -> None:
         mock_status.return_value = [{"table_name": "t", "status": "modified"}]
@@ -165,7 +177,9 @@ class TestDoltAutocommit:
     @patch("django_dolt.decorators.services.dolt_add_and_commit")
     @patch("django_dolt.decorators.services.dolt_status")
     def test_using_multiple_dbs(
-        self, mock_status: MagicMock, mock_commit: MagicMock,
+        self,
+        mock_status: MagicMock,
+        mock_commit: MagicMock,
         auth_request: HttpRequest,
     ) -> None:
         mock_status.return_value = [{"table_name": "t", "status": "modified"}]
@@ -178,7 +192,9 @@ class TestDoltAutocommit:
     @patch("django_dolt.decorators.services.dolt_add_and_commit")
     @patch("django_dolt.decorators.services.dolt_status")
     def test_callable_message(
-        self, mock_status: MagicMock, mock_commit: MagicMock,
+        self,
+        mock_status: MagicMock,
+        mock_commit: MagicMock,
         auth_request: HttpRequest,
     ) -> None:
         mock_status.return_value = [{"table_name": "t", "status": "modified"}]
@@ -195,13 +211,17 @@ class TestDoltAutocommit:
     @patch("django_dolt.decorators.services.dolt_add_and_commit")
     @patch("django_dolt.decorators.services.dolt_status")
     def test_custom_author_string(
-        self, mock_status: MagicMock, mock_commit: MagicMock,
+        self,
+        mock_status: MagicMock,
+        mock_commit: MagicMock,
         auth_request: HttpRequest,
     ) -> None:
         mock_status.return_value = [{"table_name": "t", "status": "modified"}]
 
         wrapped = dolt_autocommit(
-            _ok_view, using="inventory", author="Bot <bot@example.com>",
+            _ok_view,
+            using="inventory",
+            author="Bot <bot@example.com>",
         )
         wrapped(auth_request)
 
@@ -210,7 +230,9 @@ class TestDoltAutocommit:
     @patch("django_dolt.decorators.services.dolt_add_and_commit")
     @patch("django_dolt.decorators.services.dolt_status")
     def test_suppress_errors_true(
-        self, mock_status: MagicMock, mock_commit: MagicMock,
+        self,
+        mock_status: MagicMock,
+        mock_commit: MagicMock,
         auth_request: HttpRequest,
     ) -> None:
         mock_status.return_value = [{"table_name": "t", "status": "modified"}]
@@ -224,7 +246,9 @@ class TestDoltAutocommit:
     @patch("django_dolt.decorators.services.dolt_add_and_commit")
     @patch("django_dolt.decorators.services.dolt_status")
     def test_suppress_errors_false(
-        self, mock_status: MagicMock, mock_commit: MagicMock,
+        self,
+        mock_status: MagicMock,
+        mock_commit: MagicMock,
         auth_request: HttpRequest,
     ) -> None:
         mock_status.return_value = [{"table_name": "t", "status": "modified"}]
@@ -247,7 +271,9 @@ class TestDoltAutocommit:
     @patch("django_dolt.decorators.services.dolt_add_and_commit")
     @patch("django_dolt.decorators.services.dolt_status")
     def test_custom_commit_on_predicate(
-        self, mock_status: MagicMock, mock_commit: MagicMock,
+        self,
+        mock_status: MagicMock,
+        mock_commit: MagicMock,
         auth_request: HttpRequest,
     ) -> None:
         """Custom commit_on that only allows 200."""
@@ -265,7 +291,9 @@ class TestDoltAutocommit:
     @patch("django_dolt.decorators.services.dolt_add_and_commit")
     @patch("django_dolt.decorators.services.dolt_status")
     def test_bare_decorator_syntax(
-        self, mock_status: MagicMock, mock_commit: MagicMock,
+        self,
+        mock_status: MagicMock,
+        mock_commit: MagicMock,
         auth_request: HttpRequest,
     ) -> None:
         """@dolt_autocommit without parens should work."""

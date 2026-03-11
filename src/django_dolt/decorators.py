@@ -1,7 +1,5 @@
 """View decorators for automatic Dolt commits."""
 
-from __future__ import annotations
-
 import functools
 import logging
 from collections.abc import Callable
@@ -104,7 +102,8 @@ def dolt_autocommit(
             for db_alias in db_list:
                 try:
                     status = services.dolt_status(
-                        exclude_ignored=True, using=db_alias,
+                        exclude_ignored=True,
+                        using=db_alias,
                     )
                     if not status:
                         continue
@@ -116,7 +115,8 @@ def dolt_autocommit(
                 except Exception:
                     if suppress_errors:
                         logger.exception(
-                            "dolt_autocommit: failed to commit to %s", db_alias,
+                            "dolt_autocommit: failed to commit to %s",
+                            db_alias,
                         )
                     else:
                         raise

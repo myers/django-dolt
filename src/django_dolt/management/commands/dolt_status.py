@@ -2,8 +2,6 @@
 Django management command to show Dolt database status.
 """
 
-from __future__ import annotations
-
 from typing import Any
 
 from django.core.management.base import BaseCommand, CommandParser
@@ -53,7 +51,7 @@ class Command(BaseCommand):
 
         if status:
             self.stdout.write("\nUncommitted changes:")
-            self.stdout.write(self._format_status(status))
+            self.stdout.write(services.format_status_rows(status))
         else:
             self.stdout.write("\nNo uncommitted changes")
 
@@ -71,16 +69,3 @@ class Command(BaseCommand):
                 date = commit["date"]
                 message = commit["message"].split("\n")[0]  # First line only
                 self.stdout.write(f"  {hash_short} {date} - {message}")
-
-    def _format_status(self, status_rows: list[dict[str, Any]]) -> str:
-        """Format dolt_status output for display."""
-        if not status_rows:
-            return "No changes"
-
-        output = []
-        for row in status_rows:
-            staged = "staged" if row.get("staged", 0) else "modified"
-            table = row.get("table_name", "unknown")
-            status = row.get("status", "")
-            output.append(f"  {staged}: {table} ({status})")
-        return "\n".join(output)

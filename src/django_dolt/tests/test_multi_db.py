@@ -1,15 +1,12 @@
 """Tests for multi-database support."""
 
-from __future__ import annotations
-
 from collections.abc import Generator
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 from django.db import connections
 
 from django_dolt.dolt_databases import (
-    _is_dolt_database,
     get_dolt_databases,
     reset_dolt_databases,
 )
@@ -25,7 +22,7 @@ from django_dolt.services import (
 
 
 class TestDoltDatabaseDiscovery:
-    """Tests for Dolt database discovery."""
+    """Tests for Dolt database discovery via DOLT_DATABASES setting."""
 
     def setup_method(self) -> None:
         reset_dolt_databases()
@@ -33,47 +30,41 @@ class TestDoltDatabaseDiscovery:
     def teardown_method(self) -> None:
         reset_dolt_databases()
 
+    def test_get_dolt_databases_reads_setting(self) -> None:
+        with patch("django.conf.settings.DOLT_DATABASES", ["mydb1", "mydb2"]):
+            result = get_dolt_databases()
+            assert result == ["mydb1", "mydb2"]
+
     def test_get_dolt_databases_caches_result(self) -> None:
-        with patch(
-            "django_dolt.dolt_databases.connections",
-            MagicMock(__iter__=lambda self: iter([])),
-        ):
+        with patch("django.conf.settings.DOLT_DATABASES", ["db1"]):
             result1 = get_dolt_databases()
             result2 = get_dolt_databases()
             assert result1 is result2
 
     def test_reset_dolt_databases_clears_cache(self) -> None:
-        with patch(
-            "django_dolt.dolt_databases.connections",
-            MagicMock(__iter__=lambda self: iter([])),
-        ):
+        with patch("django.conf.settings.DOLT_DATABASES", ["db1"]):
             result1 = get_dolt_databases()
             reset_dolt_databases()
             result2 = get_dolt_databases()
             assert result1 is not result2
 
-    def test_is_dolt_database_returns_false_for_sqlite(self) -> None:
-        mock_settings = {"test": {"ENGINE": "django.db.backends.sqlite3"}}
-        with self._patched_databases(mock_settings):
-            assert _is_dolt_database("test") is False
+    def test_get_dolt_databases_missing_setting(self) -> None:
+        """When DOLT_DATABASES is not set, return empty list."""
+        with patch("django.conf.settings") as mock_settings:
+            del mock_settings.DOLT_DATABASES
+            mock_settings.configure_mock(**{"DOLT_DATABASES": AttributeError})
+            # Use getattr default behavior
+            reset_dolt_databases()
+            # We need to properly simulate missing attribute
+        reset_dolt_databases()
+        with patch("django.conf.settings", spec=[]):
+            result = get_dolt_databases()
+            assert result == []
 
-    def test_is_dolt_database_returns_false_for_postgresql(self) -> None:
-        mock_settings = {"test": {"ENGINE": "django.db.backends.postgresql"}}
-        with self._patched_databases(mock_settings):
-            assert _is_dolt_database("test") is False
-
-    def test_is_dolt_database_returns_true_for_mysql(self) -> None:
-        mock_settings = {"test": {"ENGINE": "django.db.backends.mysql"}}
-        with self._patched_databases(mock_settings):
-            assert _is_dolt_database("test") is True
-
-    def test_is_dolt_database_returns_false_for_unknown_alias(self) -> None:
-        with self._patched_databases({}):
-            assert _is_dolt_database("nonexistent") is False
-
-    @staticmethod
-    def _patched_databases(databases: dict) -> patch:
-        return patch("django.conf.settings.DATABASES", databases)
+    def test_get_dolt_databases_empty_list(self) -> None:
+        with patch("django.conf.settings.DOLT_DATABASES", []):
+            result = get_dolt_databases()
+            assert result == []
 
 
 class TestProxyModelFactory:
@@ -170,9 +161,7 @@ class TestMultiDatabaseIntegration:
         assert "commit in db1" not in messages2
         assert "commit in db2" in messages2
 
-    def test_branch_operations_per_database(
-        self, multi_dolt_dbs: list[str]
-    ) -> None:
+    def test_branch_operations_per_database(self, multi_dolt_dbs: list[str]) -> None:
         """Branch operations should be independent per database."""
         db1, db2 = multi_dolt_dbs
 
