@@ -8,9 +8,12 @@ procedures (``CALL DOLT_*``). Business logic and error handling live in
 the services layer.
 """
 
+import logging
 from typing import TYPE_CHECKING, Any
 
 from django.db import connections, models
+
+logger = logging.getLogger("django_dolt")
 
 if TYPE_CHECKING:
     # Type for the tuple of proxy model classes - use Any for dynamic classes
@@ -203,6 +206,10 @@ class StatusManager(models.Manager["Status"]):
                         )
                     """)
                 except Exception:
+                    logger.debug(
+                        "dolt_ignore query failed, falling back to unfiltered dolt_status",
+                        exc_info=True,
+                    )
                     cursor.execute(
                         "SELECT * FROM dolt_status"
                     )

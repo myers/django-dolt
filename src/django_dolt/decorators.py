@@ -101,12 +101,6 @@ def dolt_autocommit(
 
             for db_alias in db_list:
                 try:
-                    status = services.dolt_status(
-                        exclude_ignored=True,
-                        using=db_alias,
-                    )
-                    if not status:
-                        continue
                     services.dolt_add_and_commit(
                         message=resolved_message,
                         author=resolved_author,

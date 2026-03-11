@@ -294,7 +294,7 @@ class BaseRemoteAdmin(ReadOnlyModelAdmin):
 # -----------------------------------------------------------------------------
 
 
-def register_dolt_admin(db_alias: str) -> None:
+def register_dolt_admin(db_alias: str, site: admin.AdminSite | None = None) -> None:
     """Register admin classes for a specific Dolt database.
 
     Creates and registers ModelAdmin classes for the database-specific
@@ -302,6 +302,7 @@ def register_dolt_admin(db_alias: str) -> None:
 
     Args:
         db_alias: Database alias from Django settings.
+        site: AdminSite to register with. Defaults to admin.site.
     """
     from django_dolt.models import create_proxy_models
 
@@ -352,9 +353,10 @@ def register_dolt_admin(db_alias: str) -> None:
             return super().get_queryset(request).using(db_alias)
 
     # Register the admin classes
-    admin.site.register(BranchProxy, DynamicBranchAdmin)
-    admin.site.register(CommitProxy, DynamicCommitAdmin)
-    admin.site.register(RemoteProxy, DynamicRemoteAdmin)
+    target_site = site or admin.site
+    target_site.register(BranchProxy, DynamicBranchAdmin)
+    target_site.register(CommitProxy, DynamicCommitAdmin)
+    target_site.register(RemoteProxy, DynamicRemoteAdmin)
 
 
 def _make_status_view(db_alias: str) -> Any:

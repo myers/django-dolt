@@ -351,6 +351,65 @@ class TestDoltStatusErrorHandling:
         assert result[0]["table_name"] == "t1"
 
 
+class TestDoltPullMocked:
+    """Test dolt_pull with mocked models.dolt_pull."""
+
+    @patch("django_dolt.models.Branch.objects.active_branch", return_value="main")
+    @patch("django_dolt.models.dolt_pull")
+    def test_pull_fast_forward(
+        self, mock_pull: MagicMock, mock_branch: MagicMock
+    ) -> None:
+        mock_pull.return_value = (1, 0)
+        result = services.dolt_pull(remote="origin", branch="main")
+        assert "Fast-forward" in result
+
+    @patch("django_dolt.models.Branch.objects.active_branch", return_value="main")
+    @patch("django_dolt.models.dolt_pull")
+    def test_pull_with_conflicts(
+        self, mock_pull: MagicMock, mock_branch: MagicMock
+    ) -> None:
+        mock_pull.return_value = (1, 3)
+        result = services.dolt_pull(remote="origin", branch="main")
+        assert "conflicts" in result
+
+    @patch("django_dolt.models.Branch.objects.active_branch", return_value="main")
+    @patch("django_dolt.models.dolt_pull")
+    def test_pull_already_up_to_date(
+        self, mock_pull: MagicMock, mock_branch: MagicMock
+    ) -> None:
+        mock_pull.return_value = (0, 0)
+        result = services.dolt_pull(remote="origin", branch="main")
+        assert "up to date" in result
+
+    @patch("django_dolt.models.Branch.objects.active_branch", return_value="main")
+    @patch("django_dolt.models.dolt_pull")
+    def test_pull_none_result(
+        self, mock_pull: MagicMock, mock_branch: MagicMock
+    ) -> None:
+        mock_pull.return_value = None
+        result = services.dolt_pull(remote="origin", branch="main")
+        assert "Pull completed" in result
+
+    @patch("django_dolt.models.Branch.objects.active_branch", return_value="main")
+    @patch("django_dolt.models.dolt_pull")
+    def test_pull_failure_raises_pull_error(
+        self, mock_pull: MagicMock, mock_branch: MagicMock
+    ) -> None:
+        mock_pull.side_effect = Exception("connection refused")
+        with pytest.raises(services.DoltPullError, match="connection refused"):
+            services.dolt_pull()
+
+    @patch("django_dolt.models.Branch.objects.active_branch", return_value="dev")
+    @patch("django_dolt.models.dolt_pull")
+    def test_pull_resolves_branch_from_active(
+        self, mock_pull: MagicMock, mock_branch: MagicMock
+    ) -> None:
+        mock_pull.return_value = (1, 0)
+        services.dolt_pull(branch=None)
+        args = mock_pull.call_args[0][0]
+        assert "dev" in args
+
+
 class TestFormatStatusRows:
     """Test format_status_rows utility function."""
 

@@ -54,6 +54,28 @@ class TestDoltCommitMixin(TestCase):
         mixin = DoltCommitMixin()
         mixin._do_dolt_commit(request, MagicMock())  # should not raise
 
+    @patch("django_dolt.admin.services.dolt_add_and_commit", side_effect=Exception("db error"))
+    @patch("django_dolt.admin._get_dolt_db_for_model", return_value="mydb")
+    def test_do_dolt_commit_handles_exception(
+        self, mock_get_db: MagicMock, mock_commit: MagicMock
+    ) -> None:
+        """When dolt_add_and_commit raises, the error is caught and a message is added."""
+        request = self.factory.post("/")
+        request.user = self.superuser
+        from django.contrib.messages.storage.fallback import FallbackStorage
+
+        request.session = "session"  # type: ignore[assignment]
+        request._messages = FallbackStorage(request)  # type: ignore[attr-defined]
+
+        mixin = DoltCommitMixin()
+        obj = MagicMock()
+        obj.__class__.__name__ = "TestModel"
+        mixin._do_dolt_commit(request, obj)  # should not raise
+
+        stored_messages = list(request._messages)  # type: ignore[attr-defined]
+        assert len(stored_messages) == 1
+        assert "Commit failed" in str(stored_messages[0])
+
     @patch("django_dolt.admin.services.dolt_add_and_commit", return_value="abc12345")
     @patch("django_dolt.admin._get_dolt_db_for_model", return_value="mydb")
     def test_do_dolt_commit_triggers_commit(
@@ -170,6 +192,41 @@ class TestMakeDiffView(TestCase):
             response = view(request, "my_table")
         assert response.status_code == 200
         assert response.template_name == "admin/django_dolt/diff.html"
+
+    @patch("django_dolt.admin.services.dolt_diff")
+    @patch("django_dolt.admin.reverse")
+    def test_renders_diff_with_data(
+        self, mock_reverse: MagicMock, mock_diff: MagicMock
+    ) -> None:
+        mock_reverse.return_value = "/admin/dolt/status/testdb/"
+        mock_diff.return_value = [
+            {
+                "diff_type": "modified",
+                "from_id": 1,
+                "to_id": 1,
+                "from_name": "old",
+                "to_name": "new",
+                "from_commit": "aaa",
+                "to_commit": "bbb",
+                "from_commit_date": "2025-01-01",
+                "to_commit_date": "2025-01-02",
+            }
+        ]
+        view = _make_diff_view("testdb")
+        request = RequestFactory().get("/")
+        request.user = User.objects.create_superuser(
+            "admin_diff", "admin_diff@example.com", "password"
+        )
+
+        with patch("django_dolt.admin.admin.site.each_context", return_value={}):
+            response = view(request, "my_table")
+        assert response.status_code == 200
+        assert "columns" in response.context_data
+        assert "diff_rows" in response.context_data
+        assert len(response.context_data["columns"]) > 0
+        assert len(response.context_data["diff_rows"]) == 1
+        cells = response.context_data["diff_rows"][0]["cells"]
+        assert any(c["changed"] for c in cells)
 
     @patch("django_dolt.admin.reverse", return_value="/admin/dolt/status/testdb/")
     def test_non_get_redirects_to_status(self, mock_reverse: MagicMock) -> None:
