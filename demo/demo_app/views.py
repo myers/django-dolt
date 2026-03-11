@@ -7,6 +7,7 @@ from django.urls import reverse
 
 import django_dolt
 from django_dolt import dolt_add_and_commit, dolt_log, dolt_status
+from django_dolt.decorators import get_author_from_request
 
 from .models import Category, Customer, Order, Product
 
@@ -92,12 +93,8 @@ def dolt_commit(request: HttpRequest, db_alias: str) -> HttpResponse:
         return HttpResponseRedirect(reverse("index"))
 
     message = request.POST.get("message", "Manual commit from demo app")
+    author = get_author_from_request(request)
 
-    user = request.user
-    if user.is_authenticated:
-        author = f"{user.get_full_name() or user.username} <{user.email or user.username + '@localhost'}>"
-    else:
-        author = "Demo App <demo@example.com>"
     try:
         commit_hash = dolt_add_and_commit(
             message=message,

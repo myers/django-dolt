@@ -55,6 +55,9 @@ __all__ = [
     # Utilities
     "get_ignored_tables",
     "get_dolt_databases",
+    # View decorator
+    "dolt_autocommit",
+    "get_author_from_request",
     # Admin extension
     "register_branch_extension",
     "DoltCommitMixin",
@@ -84,4 +87,12 @@ def __getattr__(name: str) -> Any:
         from django_dolt.admin import register_dolt_status_view
 
         return register_dolt_status_view
+    if name == "dolt_autocommit":
+        from django_dolt.decorators import dolt_autocommit
+
+        return dolt_autocommit
+    if name == "get_author_from_request":
+        from django_dolt.decorators import get_author_from_request
+
+        return get_author_from_request
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

@@ -17,8 +17,12 @@ from django.urls import URLPattern, path, reverse
 from django.db import router
 
 from django_dolt import services
+from django_dolt.decorators import get_author_from_request
 from django_dolt.dolt_databases import get_dolt_databases
 from django_dolt.models import Branch, Commit, Remote
+
+# Keep _get_author as an alias for backward compatibility
+_get_author = get_author_from_request
 
 
 def _get_dolt_db_for_model(model: type) -> str | None:
@@ -27,14 +31,6 @@ def _get_dolt_db_for_model(model: type) -> str | None:
     if db_alias and db_alias in get_dolt_databases():
         return db_alias
     return None
-
-
-def _get_author(request: HttpRequest) -> str:
-    """Get Dolt commit author string from the request's authenticated user."""
-    user = request.user
-    name = user.get_full_name() or user.username  # type: ignore[union-attr]
-    email = user.email or f"{user.username}@localhost"  # type: ignore[union-attr]
-    return f"{name} <{email}>"
 
 
 class DoltCommitMixin:
