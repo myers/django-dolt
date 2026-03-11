@@ -1,22 +1,13 @@
 """
 Dolt database operations service.
 
-Provides functions for interacting with Dolt version control features
-via Django's database connection. Read queries are delegated to model
-managers; write operations (CALL DOLT_*) live here.
+Business logic for Dolt version control features. All database access
+is delegated to model managers and functions in
+``django_dolt.models``.
 """
 
 import os
 from typing import Any
-
-from django.db import connection, connections
-
-
-def _get_connection(using: str | None = None) -> Any:
-    """Get database connection for the specified alias."""
-    if using is None:
-        return connection
-    return connections[using]
 
 
 class DoltError(Exception):
@@ -36,7 +27,7 @@ class DoltPullError(DoltError):
 
 
 # ---------------------------------------------------------------------------
-# Write operations (stored procedures)
+# Write operations
 # ---------------------------------------------------------------------------
 
 
@@ -46,10 +37,10 @@ def dolt_add(table: str = ".", *, using: str | None = None) -> None:
     Raises:
         DoltError: If the add operation fails
     """
+    from django_dolt import models
+
     try:
-        conn = _get_connection(using)
-        with conn.cursor() as cursor:
-            cursor.execute("CALL DOLT_ADD(%s)", [table])
+        models.dolt_add(table, using=using)
     except Exception as e:
         raise DoltError(f"Failed to stage '{table}': {e}") from e
 
@@ -69,22 +60,12 @@ def dolt_commit(
     Raises:
         DoltCommitError: If the commit fails
     """
+    from django_dolt import models
+
     try:
-        conn = _get_connection(using)
-        with conn.cursor() as cursor:
-            if allow_empty:
-                cursor.execute(
-                    "CALL DOLT_COMMIT("
-                    "'-m', %s, '--author', %s, '--allow-empty')",
-                    [message, author],
-                )
-            else:
-                cursor.execute(
-                    "CALL DOLT_COMMIT('-m', %s, '--author', %s)",
-                    [message, author],
-                )
-            result = cursor.fetchone()
-            return str(result[0]) if result else None
+        return models.dolt_commit(
+            message, author, allow_empty=allow_empty, using=using
+        )
     except Exception as e:
         if "nothing to commit" in str(e).lower():
             return None
@@ -98,9 +79,29 @@ def dolt_add_and_commit(
     *,
     using: str | None = None,
 ) -> str | None:
-    """Stage and commit changes in one operation."""
-    dolt_add(table, using=using)
-    return dolt_commit(message, author, using=using)
+    """Stage and commit changes in a single atomic operation.
+
+    Uses ``DOLT_COMMIT('-A', ...)`` to stage all tables (including new
+    ones) and commit in one call, avoiding race conditions between
+    separate add and commit steps.
+
+    When *table* is not ``"."``, falls back to an explicit
+    ``dolt_add`` + ``dolt_commit`` pair for that specific table.
+    """
+    from django_dolt import models
+
+    if table != ".":
+        dolt_add(table, using=using)
+        return dolt_commit(message, author, using=using)
+
+    try:
+        return models.dolt_commit(
+            message, author, stage_all=True, using=using
+        )
+    except Exception as e:
+        if "nothing to commit" in str(e).lower():
+            return None
+        raise DoltCommitError(f"Failed to commit: {e}") from e
 
 
 def dolt_add_remote(
@@ -111,12 +112,10 @@ def dolt_add_remote(
     Raises:
         DoltError: If adding the remote fails
     """
+    from django_dolt import models
+
     try:
-        conn = _get_connection(using)
-        with conn.cursor() as cursor:
-            cursor.execute(
-                "CALL DOLT_REMOTE('add', %s, %s)", [name, url]
-            )
+        models.dolt_add_remote(name, url, using=using)
     except Exception as e:
         raise DoltError(
             f"Failed to add remote '{name}': {e}"
@@ -136,25 +135,21 @@ def dolt_push(
     Raises:
         DoltPushError: If push fails
     """
+    from django_dolt import models
+
     if user is None:
         user = os.environ.get("DOLT_REMOTE_USER", "")
 
     try:
-        conn = _get_connection(using)
-        with conn.cursor() as cursor:
-            push_args: list[str] = []
-            if user:
-                push_args.extend(["--user", user])
-            if force:
-                push_args.append("--force")
-            push_args.extend([remote, branch])
+        push_args: list[str] = []
+        if user:
+            push_args.extend(["--user", user])
+        if force:
+            push_args.append("--force")
+        push_args.extend([remote, branch])
 
-            placeholders = ", ".join(["%s"] * len(push_args))
-            cursor.execute(  # noqa: S608
-                f"CALL DOLT_PUSH({placeholders})", push_args
-            )
-
-            return f"Pushed {branch} to {remote}"
+        models.dolt_push(push_args, using=using)
+        return f"Pushed {branch} to {remote}"
     except Exception as e:
         error_msg = str(e)
         if "DOLT_REMOTE_PASSWORD" in error_msg:
@@ -179,6 +174,8 @@ def dolt_pull(
     Raises:
         DoltPullError: If pull fails
     """
+    from django_dolt import models
+
     if user is None:
         user = os.environ.get("DOLT_REMOTE_USER", "")
 
@@ -186,31 +183,21 @@ def dolt_pull(
         branch = dolt_current_branch(using=using)
 
     try:
-        conn = _get_connection(using)
-        with conn.cursor() as cursor:
-            pull_args: list[str] = []
-            if user:
-                pull_args.extend(["--user", user])
-            pull_args.extend([remote, branch])
+        pull_args: list[str] = []
+        if user:
+            pull_args.extend(["--user", user])
+        pull_args.extend([remote, branch])
 
-            placeholders = ", ".join(["%s"] * len(pull_args))
-            cursor.execute(  # noqa: S608
-                f"CALL DOLT_PULL({placeholders})", pull_args
-            )
-            result = cursor.fetchone()
-            if result:
-                fast_forward = result[0]
-                conflicts = (
-                    result[1] if len(result) > 1 else 0
-                )
-                if conflicts:
-                    return (
-                        f"Pulled with {conflicts} conflicts"
-                    )
-                if fast_forward:
-                    return "Fast-forward pull successful"
-                return "Already up to date"
-            return "Pull completed"
+        result = models.dolt_pull(pull_args, using=using)
+        if result:
+            fast_forward = result[0]
+            conflicts = result[1] if len(result) > 1 else 0
+            if conflicts:
+                return f"Pulled with {conflicts} conflicts"
+            if fast_forward:
+                return "Fast-forward pull successful"
+            return "Already up to date"
+        return "Pull completed"
     except Exception as e:
         raise DoltPullError(f"Pull failed: {e}") from e
 
@@ -226,22 +213,19 @@ def dolt_fetch(
     Raises:
         DoltError: If fetch fails
     """
+    from django_dolt import models
+
     if user is None:
         user = os.environ.get("DOLT_REMOTE_USER", "")
 
     try:
-        conn = _get_connection(using)
-        with conn.cursor() as cursor:
-            fetch_args: list[str] = []
-            if user:
-                fetch_args.extend(["--user", user])
-            fetch_args.append(remote)
+        fetch_args: list[str] = []
+        if user:
+            fetch_args.extend(["--user", user])
+        fetch_args.append(remote)
 
-            placeholders = ", ".join(["%s"] * len(fetch_args))
-            cursor.execute(  # noqa: S608
-                f"CALL DOLT_FETCH({placeholders})", fetch_args
-            )
-            return f"Fetched from {remote}"
+        models.dolt_fetch(fetch_args, using=using)
+        return f"Fetched from {remote}"
     except Exception as e:
         raise DoltError(f"Fetch failed: {e}") from e
 
@@ -259,20 +243,23 @@ def dolt_status(
     Raises:
         DoltError: If the status query fails
     """
-    from django_dolt.models import Status
+    from django_dolt import models
 
-    return Status.objects.current(
-        exclude_ignored=exclude_ignored, using=using
-    )
+    try:
+        return models.Status.objects.current(
+            exclude_ignored=exclude_ignored, using=using
+        )
+    except Exception as e:
+        raise DoltError(f"Failed to get status: {e}") from e
 
 
 def dolt_log(
     limit: int = 50, *, using: str | None = None
 ) -> list[dict[str, Any]]:
     """Get recent commit history."""
-    from django_dolt.models import Commit
+    from django_dolt import models
 
-    return Commit.objects.recent(limit=limit, using=using)
+    return models.Commit.objects.recent(limit=limit, using=using)
 
 
 def dolt_diff(
@@ -282,66 +269,46 @@ def dolt_diff(
     *,
     using: str | None = None,
 ) -> list[dict[str, Any]]:
-    """Get diff between two refs.
+    """Get diff between two refs."""
+    from django_dolt import models
 
-    Uses dolt_diff() / dolt_diff_summary() table-valued functions
-    which have no fixed schema, so raw SQL stays here.
-    """
-    conn = _get_connection(using)
-    with conn.cursor() as cursor:
-        if table:
-            cursor.execute(
-                "SELECT * FROM dolt_diff(%s, %s, %s)",
-                [from_ref, to_ref, table],
-            )
-        else:
-            cursor.execute(
-                "SELECT * FROM dolt_diff_summary(%s, %s)",
-                [from_ref, to_ref],
-            )
-        columns = [
-            col[0] for col in cursor.description or []
-        ]
-        return [
-            dict(zip(columns, row, strict=False))
-            for row in cursor.fetchall()
-        ]
+    return models.dolt_diff(from_ref, to_ref, table, using=using)
 
 
 def dolt_branch_list(
     *, using: str | None = None
 ) -> list[str]:
     """Get list of branch names."""
-    from django_dolt.models import Branch
+    from django_dolt import models
 
-    return Branch.objects.names(using=using)
+    return models.Branch.objects.names(using=using)
 
 
 def dolt_current_branch(
     *, using: str | None = None
 ) -> str:
     """Get the current branch name."""
-    from django_dolt.models import Branch
+    from django_dolt import models
 
-    return Branch.objects.active_branch(using=using)
+    return models.Branch.objects.active_branch(using=using)
 
 
 def get_ignored_tables(
     *, using: str | None = None
 ) -> list[str]:
     """Get list of ignored table patterns from dolt_ignore."""
-    from django_dolt.models import Ignore
+    from django_dolt import models
 
-    return Ignore.objects.patterns(using=using)
+    return models.Ignore.objects.patterns(using=using)
 
 
 def dolt_remotes(
     *, using: str | None = None
 ) -> list[dict[str, Any]]:
     """Get list of configured remotes."""
-    from django_dolt.models import Remote
+    from django_dolt import models
 
-    return Remote.objects.all_remotes(using=using)
+    return models.Remote.objects.all_remotes(using=using)
 
 
 # ---------------------------------------------------------------------------

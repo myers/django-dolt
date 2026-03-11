@@ -232,7 +232,7 @@ class DoltAdminSite(DoltMultiDBAdminMixin, DoltAdminMixin, admin.AdminSite):  # 
 
 
 # -----------------------------------------------------------------------------
-# Read-only ModelAdmin classes for Dolt system tables
+# Read-only ModelAdmin base classes
 # -----------------------------------------------------------------------------
 
 
@@ -249,8 +249,8 @@ class ReadOnlyModelAdmin(admin.ModelAdmin):  # type: ignore[type-arg]
         return False
 
 
-class BranchAdmin(ReadOnlyModelAdmin):
-    """Admin for viewing Dolt branches."""
+class BaseBranchAdmin(ReadOnlyModelAdmin):
+    """Shared configuration for Branch admin views."""
 
     list_display = ["name", "hash_short", "latest_committer", "latest_commit_date"]
     search_fields = ["name", "latest_committer"]
@@ -261,8 +261,8 @@ class BranchAdmin(ReadOnlyModelAdmin):
         return obj.hash[:8]
 
 
-class CommitAdmin(ReadOnlyModelAdmin):
-    """Admin for viewing Dolt commit history."""
+class BaseCommitAdmin(ReadOnlyModelAdmin):
+    """Shared configuration for Commit admin views."""
 
     list_display = ["hash_short", "committer", "date", "message_preview"]
     list_filter = ["committer"]
@@ -281,23 +281,12 @@ class CommitAdmin(ReadOnlyModelAdmin):
         return obj.message
 
 
-class RemoteAdmin(ReadOnlyModelAdmin):
-    """Admin for viewing Dolt remotes."""
+class BaseRemoteAdmin(ReadOnlyModelAdmin):
+    """Shared configuration for Remote admin views."""
 
     list_display = ["name", "url"]
     search_fields = ["name", "url"]
     ordering = ["name"]
-
-
-def register_default_dolt_admin() -> None:
-    """Register Dolt admin for the default database.
-
-    Only call this if your default database is a Dolt database.
-    For multi-database setups, use register_dolt_admin() instead.
-    """
-    admin.site.register(Branch, BranchAdmin)
-    admin.site.register(Commit, CommitAdmin)
-    admin.site.register(Remote, RemoteAdmin)
 
 
 # -----------------------------------------------------------------------------
@@ -318,17 +307,10 @@ def register_dolt_admin(db_alias: str) -> None:
 
     BranchProxy, CommitProxy, RemoteProxy = create_proxy_models(db_alias)
 
-    class DynamicBranchAdmin(ReadOnlyModelAdmin):
+    class DynamicBranchAdmin(BaseBranchAdmin):
         """Admin for viewing Dolt branches for a specific database."""
 
-        list_display = ["name", "hash_short", "latest_committer", "latest_commit_date"]
-        search_fields = ["name", "latest_committer"]
-        ordering = ["name"]
         change_list_template = "admin/django_dolt/branch_changelist.html"
-
-        @admin.display(description="Hash")
-        def hash_short(self, obj: Branch) -> str:
-            return obj.hash[:8]
 
         def get_queryset(self, request: HttpRequest) -> Any:
             return super().get_queryset(request).using(db_alias)
@@ -357,34 +339,14 @@ def register_dolt_admin(db_alias: str) -> None:
                     ]
             return super().changelist_view(request, extra_context=extra_context)
 
-    class DynamicCommitAdmin(ReadOnlyModelAdmin):
+    class DynamicCommitAdmin(BaseCommitAdmin):
         """Admin for viewing Dolt commit history for a specific database."""
-
-        list_display = ["hash_short", "committer", "date", "message_preview"]
-        list_filter = ["committer"]
-        search_fields = ["commit_hash", "committer", "message"]
-        ordering = ["-date"]
-        list_per_page = 50
-
-        @admin.display(description="Hash")
-        def hash_short(self, obj: Commit) -> str:
-            return obj.commit_hash[:8]
-
-        @admin.display(description="Message")
-        def message_preview(self, obj: Commit) -> str:
-            if len(obj.message) > 60:
-                return obj.message[:60] + "..."
-            return obj.message
 
         def get_queryset(self, request: HttpRequest) -> Any:
             return super().get_queryset(request).using(db_alias)
 
-    class DynamicRemoteAdmin(ReadOnlyModelAdmin):
+    class DynamicRemoteAdmin(BaseRemoteAdmin):
         """Admin for viewing Dolt remotes for a specific database."""
-
-        list_display = ["name", "url"]
-        search_fields = ["name", "url"]
-        ordering = ["name"]
 
         def get_queryset(self, request: HttpRequest) -> Any:
             return super().get_queryset(request).using(db_alias)
@@ -468,6 +430,11 @@ def _make_diff_view(db_alias: str) -> Any:
     """Create a table diff view function for a specific database."""
 
     def diff_view(request: HttpRequest, table_name: str) -> HttpResponse:
+        if request.method != "GET":
+            return HttpResponseRedirect(
+                reverse("admin:dolt_status_" + db_alias)
+            )
+
         try:
             diff_rows = services.dolt_diff(
                 "HEAD", "WORKING", table_name, using=db_alias

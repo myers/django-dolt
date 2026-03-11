@@ -175,6 +175,17 @@ class TestDoltAddAndCommit:
         result = services.dolt_add_and_commit("no changes", using=dolt_db)
         assert result is None
 
+    def test_add_and_commit_specific_table(self, dolt_db: str) -> None:
+        """When a specific table is given, falls back to add+commit pair."""
+        conn = connections[dolt_db]
+        with conn.cursor() as cursor:
+            cursor.execute("CREATE TABLE test_specific (id INT PRIMARY KEY)")
+
+        result = services.dolt_add_and_commit(
+            "specific table", table="test_specific", using=dolt_db
+        )
+        assert result is not None
+
 
 class TestDoltDiff:
     """Test dolt_diff function against real Dolt."""
@@ -206,119 +217,72 @@ class TestDoltDiff:
 
 
 # ---------------------------------------------------------------------------
-# Mock-based tests for functions that require a remote
+# Mock-based tests — patch models functions / managers
 # ---------------------------------------------------------------------------
 
 
 class TestDoltPushMocked:
-    """Test dolt_push with mocked cursor."""
+    """Test dolt_push with mocked models.dolt_push."""
 
-    @patch("django_dolt.services._get_connection")
-    def test_push_success(self, mock_get_conn: MagicMock) -> None:
-        mock_cursor = MagicMock()
-        mock_get_conn.return_value.cursor.return_value.__enter__ = lambda s: mock_cursor
-        mock_get_conn.return_value.cursor.return_value.__exit__ = MagicMock(
-            return_value=False
-        )
-
+    @patch("django_dolt.models.dolt_push")
+    def test_push_success(self, mock_push: MagicMock) -> None:
         result = services.dolt_push(remote="origin", branch="main")
         assert "Pushed" in result
+        mock_push.assert_called_once()
 
-    @patch("django_dolt.services._get_connection")
-    def test_push_failure_raises_push_error(self, mock_get_conn: MagicMock) -> None:
-        mock_cursor = MagicMock()
-        mock_cursor.execute.side_effect = Exception("push denied")
-        mock_get_conn.return_value.cursor.return_value.__enter__ = lambda s: mock_cursor
-        mock_get_conn.return_value.cursor.return_value.__exit__ = MagicMock(
-            return_value=False
-        )
-
+    @patch("django_dolt.models.dolt_push")
+    def test_push_failure_raises_push_error(self, mock_push: MagicMock) -> None:
+        mock_push.side_effect = Exception("push denied")
         with pytest.raises(services.DoltPushError, match="push denied"):
             services.dolt_push()
 
-    @patch("django_dolt.services._get_connection")
-    def test_push_with_force(self, mock_get_conn: MagicMock) -> None:
-        mock_cursor = MagicMock()
-        mock_get_conn.return_value.cursor.return_value.__enter__ = lambda s: mock_cursor
-        mock_get_conn.return_value.cursor.return_value.__exit__ = MagicMock(
-            return_value=False
-        )
-
+    @patch("django_dolt.models.dolt_push")
+    def test_push_with_force(self, mock_push: MagicMock) -> None:
         services.dolt_push(force=True)
-        call_args = mock_cursor.execute.call_args
-        assert "--force" in call_args[0][1]
+        args = mock_push.call_args[0][0]
+        assert "--force" in args
 
 
 class TestDoltFetchMocked:
-    """Test dolt_fetch with mocked cursor."""
+    """Test dolt_fetch with mocked models.dolt_fetch."""
 
-    @patch("django_dolt.services._get_connection")
-    def test_fetch_success(self, mock_get_conn: MagicMock) -> None:
-        mock_cursor = MagicMock()
-        mock_get_conn.return_value.cursor.return_value.__enter__ = lambda s: mock_cursor
-        mock_get_conn.return_value.cursor.return_value.__exit__ = MagicMock(
-            return_value=False
-        )
-
+    @patch("django_dolt.models.dolt_fetch")
+    def test_fetch_success(self, mock_fetch: MagicMock) -> None:
         result = services.dolt_fetch(remote="origin")
         assert "Fetched from origin" in result
 
-    @patch("django_dolt.services._get_connection")
-    def test_fetch_failure_raises_dolt_error(self, mock_get_conn: MagicMock) -> None:
-        mock_cursor = MagicMock()
-        mock_cursor.execute.side_effect = Exception("network error")
-        mock_get_conn.return_value.cursor.return_value.__enter__ = lambda s: mock_cursor
-        mock_get_conn.return_value.cursor.return_value.__exit__ = MagicMock(
-            return_value=False
-        )
-
+    @patch("django_dolt.models.dolt_fetch")
+    def test_fetch_failure_raises_dolt_error(self, mock_fetch: MagicMock) -> None:
+        mock_fetch.side_effect = Exception("network error")
         with pytest.raises(services.DoltError, match="network error"):
             services.dolt_fetch()
 
 
 class TestDoltAddRemoteMocked:
-    """Test dolt_add_remote with mocked cursor."""
+    """Test dolt_add_remote with mocked models.dolt_add_remote."""
 
-    @patch("django_dolt.services._get_connection")
-    def test_add_remote_success(self, mock_get_conn: MagicMock) -> None:
-        mock_cursor = MagicMock()
-        mock_get_conn.return_value.cursor.return_value.__enter__ = lambda s: mock_cursor
-        mock_get_conn.return_value.cursor.return_value.__exit__ = MagicMock(
-            return_value=False
-        )
-
+    @patch("django_dolt.models.dolt_add_remote")
+    def test_add_remote_success(self, mock_add_remote: MagicMock) -> None:
         services.dolt_add_remote("origin", "https://example.com/repo")
-        mock_cursor.execute.assert_called_once()
-
-    @patch("django_dolt.services._get_connection")
-    def test_add_remote_failure(self, mock_get_conn: MagicMock) -> None:
-        mock_cursor = MagicMock()
-        mock_cursor.execute.side_effect = Exception("already exists")
-        mock_get_conn.return_value.cursor.return_value.__enter__ = lambda s: mock_cursor
-        mock_get_conn.return_value.cursor.return_value.__exit__ = MagicMock(
-            return_value=False
+        mock_add_remote.assert_called_once_with(
+            "origin", "https://example.com/repo", using=None
         )
 
+    @patch("django_dolt.models.dolt_add_remote")
+    def test_add_remote_failure(self, mock_add_remote: MagicMock) -> None:
+        mock_add_remote.side_effect = Exception("already exists")
         with pytest.raises(services.DoltError, match="already exists"):
             services.dolt_add_remote("origin", "https://example.com")
 
 
 class TestDoltRemotesMocked:
-    """Test dolt_remotes with mocked cursor."""
+    """Test dolt_remotes via ORM manager mock."""
 
-    @patch("django_dolt.models._get_connection")
-    def test_remotes_returns_list(self, mock_conn: MagicMock) -> None:
-        mock_cursor = MagicMock()
-        mock_cursor.description = [("name",), ("url",)]
-        mock_cursor.fetchall.return_value = [
-            ("origin", "https://example.com")
+    @patch("django_dolt.models.RemoteManager.all_remotes")
+    def test_remotes_returns_list(self, mock_all_remotes: MagicMock) -> None:
+        mock_all_remotes.return_value = [
+            {"name": "origin", "url": "https://example.com"}
         ]
-        mock_conn.return_value.cursor.return_value.__enter__ = (
-            lambda s: mock_cursor
-        )
-        mock_conn.return_value.cursor.return_value.__exit__ = MagicMock(
-            return_value=False
-        )
 
         result = services.dolt_remotes()
         assert len(result) == 1
@@ -327,23 +291,13 @@ class TestDoltRemotesMocked:
 
 
 class TestGetIgnoredTablesMocked:
-    """Test get_ignored_tables with mocked cursor."""
+    """Test get_ignored_tables via ORM manager mock."""
 
-    @patch("django_dolt.models._get_connection")
+    @patch("django_dolt.models.IgnoreManager.patterns")
     def test_ignored_tables_returns_patterns(
-        self, mock_conn: MagicMock
+        self, mock_patterns: MagicMock
     ) -> None:
-        mock_cursor = MagicMock()
-        mock_cursor.fetchall.return_value = [
-            ("django_%",),
-            ("auth_%",),
-        ]
-        mock_conn.return_value.cursor.return_value.__enter__ = (
-            lambda s: mock_cursor
-        )
-        mock_conn.return_value.cursor.return_value.__exit__ = MagicMock(
-            return_value=False
-        )
+        mock_patterns.return_value = ["django_%", "auth_%"]
 
         result = services.get_ignored_tables()
         assert result == ["django_%", "auth_%"]
@@ -352,29 +306,18 @@ class TestGetIgnoredTablesMocked:
 class TestDoltStatusErrorHandling:
     """Test dolt_status error handling."""
 
-    @patch("django_dolt.models._get_connection")
+    @patch("django_dolt.models.StatusManager.current")
     def test_status_wraps_exception_in_dolt_error(
-        self, mock_conn: MagicMock
+        self, mock_current: MagicMock
     ) -> None:
-        mock_cursor = MagicMock()
-        mock_cursor.execute.side_effect = Exception(
-            "connection lost"
-        )
-        mock_conn.return_value.cursor.return_value.__enter__ = (
-            lambda s: mock_cursor
-        )
-        mock_conn.return_value.cursor.return_value.__exit__ = MagicMock(
-            return_value=False
-        )
+        mock_current.side_effect = Exception("connection lost")
 
-        with pytest.raises(
-            services.DoltError, match="connection lost"
-        ):
+        with pytest.raises(services.DoltError, match="connection lost"):
             services.dolt_status(exclude_ignored=False)
 
-    @patch("django_dolt.models._get_connection")
+    @patch("django_dolt.models.connections")
     def test_status_exclude_ignored_falls_back(
-        self, mock_conn: MagicMock
+        self, mock_conns: MagicMock
     ) -> None:
         """When dolt_ignore table doesn't exist, fall back."""
         mock_cursor = MagicMock()
@@ -384,9 +327,7 @@ class TestDoltStatusErrorHandling:
             nonlocal call_count
             call_count += 1
             if call_count == 1 and "dolt_ignore" in sql:
-                raise Exception(
-                    "table dolt_ignore doesn't exist"
-                )
+                raise Exception("table dolt_ignore doesn't exist")
             mock_cursor.description = [
                 ("table_name",),
                 ("staged",),
@@ -397,10 +338,11 @@ class TestDoltStatusErrorHandling:
             ]
 
         mock_cursor.execute.side_effect = execute_side_effect
-        mock_conn.return_value.cursor.return_value.__enter__ = (
+        mock_conns.__getitem__ = MagicMock(return_value=MagicMock())
+        mock_conns.__getitem__.return_value.cursor.return_value.__enter__ = (
             lambda s: mock_cursor
         )
-        mock_conn.return_value.cursor.return_value.__exit__ = MagicMock(
+        mock_conns.__getitem__.return_value.cursor.return_value.__exit__ = MagicMock(
             return_value=False
         )
 

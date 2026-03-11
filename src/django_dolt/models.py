@@ -2,17 +2,139 @@
 
 These are read-only, unmanaged models that map to Dolt's built-in system tables
 for introspection of branches, commits, and remotes.
+
+Module-level ``dolt_*`` functions provide low-level access to Dolt stored
+procedures (``CALL DOLT_*``). Business logic and error handling live in
+the services layer.
 """
 
 from typing import TYPE_CHECKING, Any
 
-from django.db import models
-
-from django_dolt.services import _get_connection
+from django.db import connections, models
 
 if TYPE_CHECKING:
     # Type for the tuple of proxy model classes - use Any for dynamic classes
     type ProxyModelTuple = tuple[type[Any], type[Any], type[Any]]
+
+
+# ---------------------------------------------------------------------------
+# Stored-procedure access (no backing table)
+# ---------------------------------------------------------------------------
+
+
+def dolt_add(table: str = ".", *, using: str | None = None) -> None:
+    """Execute ``CALL DOLT_ADD(table)``."""
+    with connections[using or "default"].cursor() as cursor:
+        cursor.execute("CALL DOLT_ADD(%s)", [table])
+
+
+def dolt_commit(
+    message: str,
+    author: str,
+    *,
+    allow_empty: bool = False,
+    stage_all: bool = False,
+    using: str | None = None,
+) -> str | None:
+    """Execute ``CALL DOLT_COMMIT(...)`` and return the commit hash.
+
+    Returns ``None`` when there is nothing to commit.
+    """
+    with connections[using or "default"].cursor() as cursor:
+        args: list[str] = []
+        if stage_all:
+            args.append("-A")
+        args.extend(["-m", message, "--author", author])
+        if allow_empty:
+            args.append("--allow-empty")
+
+        placeholders = ", ".join(["%s"] * len(args))
+        cursor.execute(
+            f"CALL DOLT_COMMIT({placeholders})", args  # noqa: S608
+        )
+        result = cursor.fetchone()
+        return str(result[0]) if result else None
+
+
+def dolt_add_remote(
+    name: str, url: str, *, using: str | None = None
+) -> None:
+    """Execute ``CALL DOLT_REMOTE('add', name, url)``."""
+    with connections[using or "default"].cursor() as cursor:
+        cursor.execute(
+            "CALL DOLT_REMOTE('add', %s, %s)", [name, url]
+        )
+
+
+def dolt_push(
+    args: list[str], *, using: str | None = None
+) -> None:
+    """Execute ``CALL DOLT_PUSH(...)``."""
+    with connections[using or "default"].cursor() as cursor:
+        placeholders = ", ".join(["%s"] * len(args))
+        cursor.execute(  # noqa: S608
+            f"CALL DOLT_PUSH({placeholders})", args
+        )
+
+
+def dolt_pull(
+    args: list[str], *, using: str | None = None
+) -> tuple[Any, ...] | None:
+    """Execute ``CALL DOLT_PULL(...)`` and return the result row."""
+    with connections[using or "default"].cursor() as cursor:
+        placeholders = ", ".join(["%s"] * len(args))
+        cursor.execute(  # noqa: S608
+            f"CALL DOLT_PULL({placeholders})", args
+        )
+        return cursor.fetchone()
+
+
+def dolt_fetch(
+    args: list[str], *, using: str | None = None
+) -> None:
+    """Execute ``CALL DOLT_FETCH(...)``."""
+    with connections[using or "default"].cursor() as cursor:
+        placeholders = ", ".join(["%s"] * len(args))
+        cursor.execute(  # noqa: S608
+            f"CALL DOLT_FETCH({placeholders})", args
+        )
+
+
+def dolt_diff(
+    from_ref: str,
+    to_ref: str,
+    table: str | None = None,
+    *,
+    using: str | None = None,
+) -> list[dict[str, Any]]:
+    """Query ``dolt_diff()`` or ``dolt_diff_summary()``.
+
+    These are table-valued functions with dynamic schemas, so raw
+    SQL is required.
+    """
+    with connections[using or "default"].cursor() as cursor:
+        if table:
+            cursor.execute(
+                "SELECT * FROM dolt_diff(%s, %s, %s)",
+                [from_ref, to_ref, table],
+            )
+        else:
+            cursor.execute(
+                "SELECT * FROM dolt_diff_summary(%s, %s)",
+                [from_ref, to_ref],
+            )
+        columns = [
+            col[0] for col in cursor.description or []
+        ]
+        return [
+            dict(zip(columns, row, strict=False))
+            for row in cursor.fetchall()
+        ]
+
+
+# ---------------------------------------------------------------------------
+# Read-only managers
+# ---------------------------------------------------------------------------
 
 
 class BranchManager(models.Manager["Branch"]):
@@ -24,9 +146,12 @@ class BranchManager(models.Manager["Branch"]):
         return list(qs.values_list("name", flat=True))
 
     def active_branch(self, *, using: str | None = None) -> str:
-        """Return the currently active branch name."""
-        conn = _get_connection(using)
-        with conn.cursor() as cursor:
+        """Return the currently active branch name.
+
+        Uses the Dolt SQL function ``active_branch()`` which has no
+        table equivalent, so raw SQL is required here.
+        """
+        with connections[using or "default"].cursor() as cursor:
             cursor.execute("SELECT active_branch()")
             result = cursor.fetchone()
             return str(result[0]) if result else "main"
@@ -38,21 +163,17 @@ class CommitManager(models.Manager["Commit"]):
     def recent(
         self, limit: int = 50, *, using: str | None = None
     ) -> list[dict[str, Any]]:
-        """Return recent commits as dicts."""
-        conn = _get_connection(using)
-        with conn.cursor() as cursor:
-            cursor.execute(
-                "SELECT commit_hash, committer, email, "
-                "date, message FROM dolt_log LIMIT %s",
-                [limit],
-            )
-            columns = [
-                col[0] for col in cursor.description or []
-            ]
-            return [
-                dict(zip(columns, row, strict=False))
-                for row in cursor.fetchall()
-            ]
+        """Return recent commits as dicts.
+
+        Uses ``order_by()`` with no args to preserve Dolt's native
+        graph ordering (parent-child) from the ``dolt_log`` table.
+        """
+        qs = self.using(using) if using else self.all()
+        return list(
+            qs.order_by().values(
+                "commit_hash", "committer", "email", "date", "message"
+            )[:limit]
+        )
 
 
 class StatusManager(models.Manager["Status"]):
@@ -64,41 +185,36 @@ class StatusManager(models.Manager["Status"]):
         *,
         using: str | None = None,
     ) -> list[dict[str, Any]]:
-        """Return current working-set status rows."""
-        from django_dolt.services import DoltError
+        """Return current working-set status rows.
 
-        try:
-            conn = _get_connection(using)
-            with conn.cursor() as cursor:
-                if exclude_ignored:
-                    try:
-                        cursor.execute("""
-                            SELECT s.* FROM dolt_status s
-                            WHERE NOT EXISTS (
-                                SELECT 1 FROM dolt_ignore i
-                                WHERE i.ignored = 1
-                                AND s.table_name LIKE i.pattern
-                            )
-                        """)
-                    except Exception:
-                        cursor.execute(
-                            "SELECT * FROM dolt_status"
+        The ``exclude_ignored`` filter uses a ``NOT EXISTS`` subquery
+        with ``LIKE`` matching against ``dolt_ignore``, which cannot
+        be cleanly expressed in the ORM, so raw SQL is used here.
+        """
+        with connections[using or "default"].cursor() as cursor:
+            if exclude_ignored:
+                try:
+                    cursor.execute("""
+                        SELECT s.* FROM dolt_status s
+                        WHERE NOT EXISTS (
+                            SELECT 1 FROM dolt_ignore i
+                            WHERE i.ignored = 1
+                            AND s.table_name LIKE i.pattern
                         )
-                else:
-                    cursor.execute("SELECT * FROM dolt_status")
-                columns = [
-                    col[0] for col in cursor.description or []
-                ]
-                return [
-                    dict(zip(columns, row, strict=False))
-                    for row in cursor.fetchall()
-                ]
-        except DoltError:
-            raise
-        except Exception as e:
-            raise DoltError(
-                f"Failed to get status: {e}"
-            ) from e
+                    """)
+                except Exception:
+                    cursor.execute(
+                        "SELECT * FROM dolt_status"
+                    )
+            else:
+                cursor.execute("SELECT * FROM dolt_status")
+            columns = [
+                col[0] for col in cursor.description or []
+            ]
+            return [
+                dict(zip(columns, row, strict=False))
+                for row in cursor.fetchall()
+            ]
 
 
 class IgnoreManager(models.Manager["Ignore"]):
@@ -106,12 +222,10 @@ class IgnoreManager(models.Manager["Ignore"]):
 
     def patterns(self, *, using: str | None = None) -> list[str]:
         """Return ignored table patterns."""
-        conn = _get_connection(using)
-        with conn.cursor() as cursor:
-            cursor.execute(
-                "SELECT pattern FROM dolt_ignore WHERE ignored = 1"
-            )
-            return [str(row[0]) for row in cursor.fetchall()]
+        qs = self.using(using) if using else self.all()
+        return list(
+            qs.filter(ignored=True).values_list("pattern", flat=True)
+        )
 
 
 class RemoteManager(models.Manager["Remote"]):
@@ -121,16 +235,13 @@ class RemoteManager(models.Manager["Remote"]):
         self, *, using: str | None = None
     ) -> list[dict[str, Any]]:
         """Return all remotes as dicts."""
-        conn = _get_connection(using)
-        with conn.cursor() as cursor:
-            cursor.execute("SELECT * FROM dolt_remotes")
-            columns = [
-                col[0] for col in cursor.description or []
-            ]
-            return [
-                dict(zip(columns, row, strict=False))
-                for row in cursor.fetchall()
-            ]
+        qs = self.using(using) if using else self.all()
+        return list(qs.values())
+
+
+# ---------------------------------------------------------------------------
+# Model definitions
+# ---------------------------------------------------------------------------
 
 
 class Branch(models.Model):
@@ -227,7 +338,10 @@ class Remote(models.Model):
         return self.name
 
 
-# Registry for dynamically created proxy models
+# ---------------------------------------------------------------------------
+# Dynamic proxy model factory
+# ---------------------------------------------------------------------------
+
 _proxy_model_registry: dict[str, "ProxyModelTuple"] = {}
 
 

@@ -5,7 +5,7 @@ from unittest.mock import MagicMock
 import pytest
 from django.contrib.admin.sites import AdminSite
 
-from django_dolt.admin import BranchAdmin, CommitAdmin, RemoteAdmin
+from django_dolt.admin import BaseBranchAdmin, BaseCommitAdmin, BaseRemoteAdmin
 from django_dolt.models import Branch, Commit, Remote
 
 
@@ -75,80 +75,80 @@ class TestRemoteModel:
         assert pk_field.name == "name"
 
 
-class TestBranchAdmin:
-    """Test BranchAdmin configuration."""
+class TestBaseBranchAdmin:
+    """Test BaseBranchAdmin configuration."""
 
     @pytest.fixture
-    def admin_instance(self) -> BranchAdmin:
-        return BranchAdmin(Branch, AdminSite())
+    def admin_instance(self) -> BaseBranchAdmin:
+        return BaseBranchAdmin(Branch, AdminSite())
 
-    def test_list_display(self, admin_instance: BranchAdmin) -> None:
+    def test_list_display(self, admin_instance: BaseBranchAdmin) -> None:
         assert "name" in admin_instance.list_display
         assert "hash_short" in admin_instance.list_display
         assert "latest_committer" in admin_instance.list_display
 
-    def test_hash_short_truncates(self, admin_instance: BranchAdmin) -> None:
+    def test_hash_short_truncates(self, admin_instance: BaseBranchAdmin) -> None:
         branch = Branch(hash="abc123def456789")
         result = admin_instance.hash_short(branch)
         assert result == "abc123de"
 
-    def test_is_read_only(self, admin_instance: BranchAdmin) -> None:
+    def test_is_read_only(self, admin_instance: BaseBranchAdmin) -> None:
         request = MagicMock()
         assert admin_instance.has_add_permission(request) is False
         assert admin_instance.has_change_permission(request) is False
         assert admin_instance.has_delete_permission(request) is False
 
 
-class TestCommitAdmin:
-    """Test CommitAdmin configuration."""
+class TestBaseCommitAdmin:
+    """Test BaseCommitAdmin configuration."""
 
     @pytest.fixture
-    def admin_instance(self) -> CommitAdmin:
-        return CommitAdmin(Commit, AdminSite())
+    def admin_instance(self) -> BaseCommitAdmin:
+        return BaseCommitAdmin(Commit, AdminSite())
 
-    def test_list_display(self, admin_instance: CommitAdmin) -> None:
+    def test_list_display(self, admin_instance: BaseCommitAdmin) -> None:
         assert "hash_short" in admin_instance.list_display
         assert "committer" in admin_instance.list_display
         assert "date" in admin_instance.list_display
         assert "message_preview" in admin_instance.list_display
 
-    def test_hash_short_truncates(self, admin_instance: CommitAdmin) -> None:
+    def test_hash_short_truncates(self, admin_instance: BaseCommitAdmin) -> None:
         commit = Commit(commit_hash="abc123def456789")
         result = admin_instance.hash_short(commit)
         assert result == "abc123de"
 
-    def test_message_preview_short_message(self, admin_instance: CommitAdmin) -> None:
+    def test_message_preview_short_message(self, admin_instance: BaseCommitAdmin) -> None:
         commit = Commit(message="Short message")
         result = admin_instance.message_preview(commit)
         assert result == "Short message"
 
-    def test_message_preview_long_message(self, admin_instance: CommitAdmin) -> None:
+    def test_message_preview_long_message(self, admin_instance: BaseCommitAdmin) -> None:
         commit = Commit(message="A" * 100)
         result = admin_instance.message_preview(commit)
         assert result == "A" * 60 + "..."
 
-    def test_ordering(self, admin_instance: CommitAdmin) -> None:
+    def test_ordering(self, admin_instance: BaseCommitAdmin) -> None:
         assert admin_instance.ordering == ["-date"]
 
-    def test_is_read_only(self, admin_instance: CommitAdmin) -> None:
+    def test_is_read_only(self, admin_instance: BaseCommitAdmin) -> None:
         request = MagicMock()
         assert admin_instance.has_add_permission(request) is False
         assert admin_instance.has_change_permission(request) is False
         assert admin_instance.has_delete_permission(request) is False
 
 
-class TestRemoteAdmin:
-    """Test RemoteAdmin configuration."""
+class TestBaseRemoteAdmin:
+    """Test BaseRemoteAdmin configuration."""
 
     @pytest.fixture
-    def admin_instance(self) -> RemoteAdmin:
-        return RemoteAdmin(Remote, AdminSite())
+    def admin_instance(self) -> BaseRemoteAdmin:
+        return BaseRemoteAdmin(Remote, AdminSite())
 
-    def test_list_display(self, admin_instance: RemoteAdmin) -> None:
+    def test_list_display(self, admin_instance: BaseRemoteAdmin) -> None:
         assert "name" in admin_instance.list_display
         assert "url" in admin_instance.list_display
 
-    def test_is_read_only(self, admin_instance: RemoteAdmin) -> None:
+    def test_is_read_only(self, admin_instance: BaseRemoteAdmin) -> None:
         request = MagicMock()
         assert admin_instance.has_add_permission(request) is False
         assert admin_instance.has_change_permission(request) is False

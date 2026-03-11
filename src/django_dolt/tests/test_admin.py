@@ -11,7 +11,6 @@ from django_dolt.admin import (
     ReadOnlyModelAdmin,
     _make_diff_view,
     _make_status_view,
-    register_default_dolt_admin,
 )
 
 
@@ -172,6 +171,18 @@ class TestMakeDiffView(TestCase):
         assert response.status_code == 200
         assert response.template_name == "admin/django_dolt/diff.html"
 
+    @patch("django_dolt.admin.reverse", return_value="/admin/dolt/status/testdb/")
+    def test_non_get_redirects_to_status(self, mock_reverse: MagicMock) -> None:
+        """Non-GET requests should redirect to status page."""
+        view = _make_diff_view("testdb")
+        request = RequestFactory().post("/")
+        request.user = User.objects.create_superuser(
+            "admin3", "admin3@example.com", "password"
+        )
+
+        response = view(request, "my_table")
+        assert response.status_code == 302
+
 
 @pytest.mark.django_db
 class TestDoltCommitMixinResponseAdd(TestCase):
@@ -248,25 +259,3 @@ class TestDoltCommitMixinResponseAdd(TestCase):
             model_admin.response_change(request, obj)
 
         mock_commit.assert_called_once()
-
-
-@pytest.mark.django_db
-class TestRegisterDefaultDoltAdmin(TestCase):
-    """Test register_default_dolt_admin."""
-
-    def test_registers_three_model_admins(self) -> None:
-        from django.contrib import admin as django_admin
-
-        from django_dolt.models import Branch, Commit, Remote
-
-        # Use a fresh AdminSite to avoid conflicts with the default site
-        site = django_admin.AdminSite()
-        with patch("django_dolt.admin.admin") as mock_admin_module:
-            mock_admin_module.site = site
-            mock_admin_module.ModelAdmin = django_admin.ModelAdmin
-            mock_admin_module.display = django_admin.display
-            register_default_dolt_admin()
-
-        assert Branch in site._registry
-        assert Commit in site._registry
-        assert Remote in site._registry
