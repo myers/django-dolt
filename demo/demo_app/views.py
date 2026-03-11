@@ -93,10 +93,15 @@ def dolt_commit(request: HttpRequest, db_alias: str) -> HttpResponse:
 
     message = request.POST.get("message", "Manual commit from demo app")
 
+    user = request.user
+    if user.is_authenticated:
+        author = f"{user.get_full_name() or user.username} <{user.email or user.username + '@localhost'}>"
+    else:
+        author = "Demo App <demo@example.com>"
     try:
         commit_hash = dolt_add_and_commit(
             message=message,
-            author="Demo App <demo@example.com>",
+            author=author,
             using=db_alias,
         )
         if commit_hash:
@@ -106,7 +111,10 @@ def dolt_commit(request: HttpRequest, db_alias: str) -> HttpResponse:
     except Exception as e:
         messages.error(request, f"Commit failed: {e}")
 
-    # Redirect back to the appropriate dashboard
+    # Redirect to 'next' param if provided, otherwise back to dashboard
+    next_url = request.POST.get("next")
+    if next_url:
+        return HttpResponseRedirect(next_url)
     if db_alias == "inventory_db":
         return HttpResponseRedirect(reverse("inventory"))
     elif db_alias == "orders_db":

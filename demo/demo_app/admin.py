@@ -2,6 +2,8 @@
 
 from django.contrib import admin
 
+from django_dolt.admin import DoltCommitMixin
+
 from .models import Category, Customer, Order, OrderItem, Product
 
 
@@ -11,7 +13,7 @@ from .models import Category, Customer, Order, OrderItem, Product
 
 
 @admin.register(Category)
-class CategoryAdmin(admin.ModelAdmin):  # type: ignore[type-arg]
+class CategoryAdmin(DoltCommitMixin, admin.ModelAdmin):  # type: ignore[type-arg]
     """Admin for product categories."""
 
     list_display = ["name", "description", "created_at"]
@@ -19,7 +21,7 @@ class CategoryAdmin(admin.ModelAdmin):  # type: ignore[type-arg]
 
 
 @admin.register(Product)
-class ProductAdmin(admin.ModelAdmin):  # type: ignore[type-arg]
+class ProductAdmin(DoltCommitMixin, admin.ModelAdmin):  # type: ignore[type-arg]
     """Admin for products."""
 
     list_display = ["sku", "name", "category", "price", "quantity_in_stock"]
@@ -40,7 +42,7 @@ class OrderItemInline(admin.TabularInline):  # type: ignore[type-arg]
 
 
 @admin.register(Customer)
-class CustomerAdmin(admin.ModelAdmin):  # type: ignore[type-arg]
+class CustomerAdmin(DoltCommitMixin, admin.ModelAdmin):  # type: ignore[type-arg]
     """Admin for customers."""
 
     list_display = ["email", "first_name", "last_name", "created_at"]
@@ -48,7 +50,7 @@ class CustomerAdmin(admin.ModelAdmin):  # type: ignore[type-arg]
 
 
 @admin.register(Order)
-class OrderAdmin(admin.ModelAdmin):  # type: ignore[type-arg]
+class OrderAdmin(DoltCommitMixin, admin.ModelAdmin):  # type: ignore[type-arg]
     """Admin for orders."""
 
     list_display = ["order_number", "customer", "status", "total_amount", "created_at"]

@@ -44,17 +44,4 @@
         <a href="{% url 'orders' %}" class="btn">View Orders →</a>
     </div>
 </div>
-
-<div class="card">
-    <h2>🔧 Detected Dolt Databases</h2>
-    {% if dolt_databases %}
-    <ul style="margin-left: 2rem;">
-        {% for db in dolt_databases %}
-        <li><code>{{ db }}</code></li>
-        {% endfor %}
-    </ul>
-    {% else %}
-    <p>No Dolt databases detected. Make sure the Dolt server is running.</p>
-    {% endif %}
-</div>
 {% endblock %}

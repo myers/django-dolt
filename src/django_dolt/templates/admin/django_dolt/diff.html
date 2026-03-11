@@ -1,0 +1,82 @@
+{% extends "admin/base_site.html" %}
+{% load i18n %}
+
+{% block title %}{{ title }} | {{ site_title }}{% endblock %}
+
+{% block extrastyle %}
+{{ block.super }}
+<style>
+    .diff-added { background-color: rgba(40, 167, 69, 0.15); }
+    .diff-removed { background-color: rgba(220, 53, 69, 0.15); }
+    .diff-modified { background-color: rgba(255, 193, 7, 0.1); }
+    .diff-cell-changed { font-weight: bold; }
+    .diff-from { color: #dc3545; text-decoration: line-through; font-size: 0.9em; display: block; }
+    .diff-to { color: #28a745; display: block; }
+    .diff-badge {
+        display: inline-block; padding: 2px 8px; border-radius: 3px;
+        font-size: 0.8em; font-weight: bold; color: #fff;
+    }
+    .diff-badge-added { background: #28a745; }
+    .diff-badge-removed { background: #dc3545; }
+    .diff-badge-modified { background: #ffc107; color: #333; }
+</style>
+{% endblock %}
+
+{% block breadcrumbs %}
+<div class="breadcrumbs">
+    <a href="{% url 'admin:index' %}">{% translate "Home" %}</a>
+    &rsaquo; <a href="{{ status_url }}">{{ db_display }} — Status</a>
+    &rsaquo; {{ table_name }}
+</div>
+{% endblock %}
+
+{% block content %}
+<div id="content-main">
+    <h2>{% translate "Changes in" %} <code>{{ table_name }}</code></h2>
+
+    {% if diff_rows %}
+    <p>{{ diff_rows|length }} row{{ diff_rows|pluralize }} changed.</p>
+    <div class="module" style="overflow-x: auto;">
+        <table>
+            <thead>
+                <tr>
+                    <th>{% translate "Type" %}</th>
+                    {% for col in columns %}
+                    <th>{{ col }}</th>
+                    {% endfor %}
+                </tr>
+            </thead>
+            <tbody>
+                {% for row in diff_rows %}
+                <tr class="diff-{{ row.diff_type }}">
+                    <td>
+                        <span class="diff-badge diff-badge-{{ row.diff_type }}">{{ row.diff_type }}</span>
+                    </td>
+                    {% for cell in row.cells %}
+                    <td{% if cell.changed %} class="diff-cell-changed"{% endif %}>
+                        {% if row.diff_type == "added" %}
+                            {{ cell.to_val }}
+                        {% elif row.diff_type == "removed" %}
+                            {{ cell.from_val }}
+                        {% elif cell.changed %}
+                            <span class="diff-from">{{ cell.from_val }}</span>
+                            <span class="diff-to">{{ cell.to_val }}</span>
+                        {% else %}
+                            {{ cell.to_val }}
+                        {% endif %}
+                    </td>
+                    {% endfor %}
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <p class="quiet">{% translate "No row-level changes found." %}</p>
+    {% endif %}
+
+    <p style="margin-top: 20px;">
+        <a href="{{ status_url }}" class="button">&larr; {% translate "Back to Status" %}</a>
+    </p>
+</div>
+{% endblock %}

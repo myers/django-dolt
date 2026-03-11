@@ -14,8 +14,81 @@ from django.http import HttpRequest, HttpResponse, HttpResponseRedirect
 from django.template.response import TemplateResponse
 from django.urls import URLPattern, path, reverse
 
+from django.db import router
+
 from django_dolt import services
+from django_dolt.dolt_databases import get_dolt_databases
 from django_dolt.models import Branch, Commit, Remote
+
+
+def _get_dolt_db_for_model(model: type) -> str | None:
+    """Get the Dolt database alias for a model using Django's router."""
+    db_alias = router.db_for_write(model)
+    if db_alias and db_alias in get_dolt_databases():
+        return db_alias
+    return None
+
+
+def _get_author(request: HttpRequest) -> str:
+    """Get Dolt commit author string from the request's authenticated user."""
+    user = request.user
+    name = user.get_full_name() or user.username  # type: ignore[union-attr]
+    email = user.email or f"{user.username}@localhost"  # type: ignore[union-attr]
+    return f"{name} <{email}>"
+
+
+class DoltCommitMixin:
+    """ModelAdmin mixin that adds a 'Save and commit' button to change forms.
+
+    When the user clicks 'Save and commit', the model is saved normally
+    and then all uncommitted changes in that model's Dolt database are
+    committed with the admin user as the author.
+
+    Uses Django's database router to determine which Dolt database the
+    model belongs to. Models not routed to a Dolt database are unaffected.
+
+    Usage:
+        from django_dolt.admin import DoltCommitMixin
+
+        @admin.register(MyModel)
+        class MyModelAdmin(DoltCommitMixin, admin.ModelAdmin):
+            pass
+    """
+
+    change_form_template = "admin/django_dolt/change_form_dolt.html"
+
+    def _do_dolt_commit(self, request: HttpRequest, obj: Any) -> None:
+        db_alias = _get_dolt_db_for_model(type(obj))
+        if not db_alias:
+            return
+        author = _get_author(request)
+        try:
+            commit_hash = services.dolt_add_and_commit(
+                message=f"Update {type(obj).__name__}: {obj}",
+                author=author,
+                using=db_alias,
+            )
+            if commit_hash:
+                messages.success(request, f"Committed to {db_alias}: {commit_hash[:8]}")
+            else:
+                messages.info(request, f"No changes to commit in {db_alias}")
+        except Exception as e:
+            messages.error(request, f"Commit failed: {e}")
+
+    def response_add(self, request: HttpRequest, obj: Any, post_url_continue: str | None = None) -> HttpResponse:
+        if "_save_and_commit" in request.POST:
+            response = super().response_add(request, obj, post_url_continue)  # type: ignore[misc]
+            self._do_dolt_commit(request, obj)
+            return response
+        return super().response_add(request, obj, post_url_continue)  # type: ignore[misc]
+
+    def response_change(self, request: HttpRequest, obj: Any) -> HttpResponse:
+        if "_save_and_commit" in request.POST:
+            response = super().response_change(request, obj)  # type: ignore[misc]
+            self._do_dolt_commit(request, obj)
+            return response
+        return super().response_change(request, obj)  # type: ignore[misc]
+
 
 # Extension registry: db_alias -> extension config dict
 _branch_extensions: dict[str, dict] = {}
@@ -553,3 +626,197 @@ def enable_dolt_admin_grouping() -> None:
         return other_apps + dolt_apps
 
     admin.site.get_app_list = get_app_list_with_dolt_grouping  # type: ignore[method-assign]
+
+
+def register_dolt_status_view() -> None:
+    """Register a Dolt Status view and sidebar entry for each Dolt database.
+
+    Adds a "Status" link alongside Branches/Commits/Remotes in each
+    database's admin group. The status page shows uncommitted changes
+    and provides a commit form.
+
+    Call this in your app's ready() hook:
+        from django_dolt.admin import register_dolt_status_view
+        register_dolt_status_view()
+    """
+    from django_dolt.dolt_databases import get_dolt_databases
+
+    dolt_databases = get_dolt_databases()
+    if not dolt_databases:
+        return
+
+    # Add URL patterns for status views
+    original_get_urls = admin.site.get_urls
+
+    def get_urls_with_status():
+        urls = original_get_urls()
+        status_urls = []
+        for db_alias in dolt_databases:
+            status_urls.append(
+                path(
+                    f"django_dolt/status_{db_alias}/",
+                    admin.site.admin_view(_make_status_view(db_alias)),
+                    name=f"dolt_status_{db_alias}",
+                )
+            )
+            status_urls.append(
+                path(
+                    f"django_dolt/status_{db_alias}/diff/<str:table_name>/",
+                    admin.site.admin_view(_make_diff_view(db_alias)),
+                    name=f"dolt_diff_{db_alias}",
+                )
+            )
+        return status_urls + urls
+
+    admin.site.get_urls = get_urls_with_status  # type: ignore[method-assign]
+
+    # Inject "Status" into each database group in the sidebar
+    previous_get_app_list = admin.site.get_app_list
+
+    def get_app_list_with_status(
+        request: HttpRequest, app_label: str | None = None,
+    ) -> list[dict[str, Any]]:
+        app_list = previous_get_app_list(request, app_label)
+        for app in app_list:
+            app_label_val = app.get("app_label", "")
+            if not app_label_val.startswith("django_dolt_"):
+                continue
+            db_suffix = app_label_val.removeprefix("django_dolt_")
+            if db_suffix not in dolt_databases:
+                continue
+            # Check if Status entry already exists
+            if any(m.get("name") == "Status" for m in app.get("models", [])):
+                continue
+            status_url = reverse("admin:dolt_status_" + db_suffix)
+            app["models"].insert(0, {
+                "name": "Status",
+                "object_name": f"Status_{db_suffix}",
+                "admin_url": status_url,
+                "view_only": True,
+            })
+        return app_list
+
+    admin.site.get_app_list = get_app_list_with_status  # type: ignore[method-assign]
+
+
+def _make_status_view(db_alias: str):
+    """Create a status view function for a specific database."""
+
+    def status_view(request: HttpRequest) -> HttpResponse:
+        if request.method == "POST":
+            message = request.POST.get("message", "Manual commit")
+            author = _get_author(request)
+            try:
+                services.dolt_add(".", using=db_alias)
+                result = services.dolt_commit(
+                    message=message,
+                    author=author,
+                    using=db_alias,
+                )
+                messages.success(request, f"Committed to {db_alias}: {result[:8]}")
+            except services.DoltError as e:
+                err_msg = str(e)
+                if "nothing to commit" in err_msg.lower():
+                    messages.info(request, f"No changes to commit in {db_alias}")
+                else:
+                    messages.error(request, f"Commit failed: {e}")
+            return HttpResponseRedirect(
+                reverse("admin:dolt_status_" + db_alias)
+            )
+
+        # GET: show status
+        try:
+            status = services.dolt_status(exclude_ignored=True, using=db_alias)
+            for item in status:
+                item["diff_url"] = reverse(
+                    "admin:dolt_diff_" + db_alias,
+                    kwargs={"table_name": item["table_name"]},
+                )
+        except Exception:
+            status = []
+
+        try:
+            commits = services.dolt_log(limit=10, using=db_alias)
+        except Exception:
+            commits = []
+
+        try:
+            current_branch = services.dolt_current_branch(using=db_alias)
+        except Exception:
+            current_branch = "unknown"
+
+        db_display = db_alias.replace("_", " ").title()
+        context = {
+            **admin.site.each_context(request),
+            "title": f"{db_display} — Dolt Status",
+            "db_alias": db_alias,
+            "db_display": db_display,
+            "current_branch": current_branch,
+            "status": status,
+            "commits": commits,
+        }
+        return TemplateResponse(
+            request, "admin/django_dolt/status.html", context
+        )
+
+    return status_view
+
+
+def _make_diff_view(db_alias: str):
+    """Create a table diff view function for a specific database."""
+
+    def diff_view(request: HttpRequest, table_name: str) -> HttpResponse:
+        try:
+            diff_rows = services.dolt_diff("HEAD", "WORKING", table_name, using=db_alias)
+        except Exception:
+            diff_rows = []
+
+        # Process diff rows: extract column names and highlight changes
+        columns: list[str] = []
+        processed_rows: list[dict[str, Any]] = []
+        if diff_rows:
+            # Get base column names (strip from_/to_ prefix), skip commit metadata
+            skip = {"commit", "commit_date"}
+            seen: list[str] = []
+            for key in diff_rows[0]:
+                if key == "diff_type":
+                    continue
+                base = key.split("_", 1)[1] if key.startswith(("from_", "to_")) else key
+                if base not in skip and base not in seen:
+                    seen.append(base)
+            columns = seen
+
+            for row in diff_rows:
+                cells = []
+                for col in columns:
+                    from_val = row.get(f"from_{col}")
+                    to_val = row.get(f"to_{col}")
+                    changed = from_val != to_val
+                    cells.append({
+                        "column": col,
+                        "from_val": from_val,
+                        "to_val": to_val,
+                        "changed": changed,
+                    })
+                processed_rows.append({
+                    "diff_type": row.get("diff_type", ""),
+                    "cells": cells,
+                })
+
+        db_display = db_alias.replace("_", " ").title()
+        status_url = reverse("admin:dolt_status_" + db_alias)
+        context = {
+            **admin.site.each_context(request),
+            "title": f"{db_display} — Diff: {table_name}",
+            "db_alias": db_alias,
+            "db_display": db_display,
+            "table_name": table_name,
+            "columns": columns,
+            "diff_rows": processed_rows,
+            "status_url": status_url,
+        }
+        return TemplateResponse(
+            request, "admin/django_dolt/diff.html", context
+        )
+
+    return diff_view

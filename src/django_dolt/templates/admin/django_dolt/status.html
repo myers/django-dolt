@@ -1,0 +1,85 @@
+{% extends "admin/base_site.html" %}
+{% load i18n %}
+
+{% block title %}{{ title }} | {{ site_title }}{% endblock %}
+
+{% block breadcrumbs %}
+<div class="breadcrumbs">
+    <a href="{% url 'admin:index' %}">{% translate "Home" %}</a>
+    &rsaquo; {{ title }}
+</div>
+{% endblock %}
+
+{% block content %}
+<div id="content-main">
+    <h2>Branch: <code>{{ current_branch }}</code></h2>
+
+    <div class="module">
+        <h3>{% translate "Uncommitted Changes" %}</h3>
+        {% if status %}
+        <table>
+            <thead>
+                <tr>
+                    <th>{% translate "Table" %}</th>
+                    <th>{% translate "Status" %}</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in status %}
+                <tr class="{% cycle 'row1' 'row2' %}">
+                    <td><a href="{{ item.diff_url }}"><code>{{ item.table_name }}</code></a></td>
+                    <td>
+                        {% if item.status == 'new table' %}
+                            <span style="color: green;">{{ item.status }}</span>
+                        {% elif item.status == 'modified' %}
+                            <span style="color: orange;">{{ item.status }}</span>
+                        {% else %}
+                            {{ item.status }}
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+
+        <form method="post" style="padding: 10px; display: flex; gap: 8px; align-items: center;">
+            {% csrf_token %}
+            <input type="text" name="message" placeholder="Commit message..." required
+                   style="flex: 1; padding: 6px 10px;">
+            <input type="submit" value="Commit" class="default">
+        </form>
+        {% else %}
+        <p class="quiet" style="padding: 10px;">{% translate "No uncommitted changes." %}</p>
+        {% endif %}
+    </div>
+
+    <h2>{% translate "Recent Commits" %}</h2>
+
+    {% if commits %}
+    <div class="module">
+        <table>
+            <thead>
+                <tr>
+                    <th>{% translate "Hash" %}</th>
+                    <th>{% translate "Date" %}</th>
+                    <th>{% translate "Author" %}</th>
+                    <th>{% translate "Message" %}</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for commit in commits %}
+                <tr class="{% cycle 'row1' 'row2' %}">
+                    <td><code>{{ commit.commit_hash|truncatechars:11 }}</code></td>
+                    <td>{{ commit.date|date:"Y-m-d H:i" }}</td>
+                    <td>{{ commit.committer }}</td>
+                    <td>{{ commit.message|truncatechars:60 }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <p class="quiet">{% translate "No commits found." %}</p>
+    {% endif %}
+</div>
+{% endblock %}

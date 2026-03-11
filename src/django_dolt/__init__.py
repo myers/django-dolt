@@ -57,6 +57,8 @@ __all__ = [
     "get_dolt_databases",
     # Admin extension
     "register_branch_extension",
+    "DoltCommitMixin",
+    "register_dolt_status_view",
 ]
 
 
@@ -74,4 +76,12 @@ def __getattr__(name: str) -> Any:
         from django_dolt.admin import register_branch_extension
 
         return register_branch_extension
+    if name == "DoltCommitMixin":
+        from django_dolt.admin import DoltCommitMixin
+
+        return DoltCommitMixin
+    if name == "register_dolt_status_view":
+        from django_dolt.admin import register_dolt_status_view
+
+        return register_dolt_status_view
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

@@ -1,0 +1,13 @@
+{% extends "admin/login.html" %}
+
+{% block extrastyle %}
+{{ block.super }}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    var username = document.getElementById('id_username');
+    var password = document.getElementById('id_password');
+    if (username && !username.value) username.value = 'admin';
+    if (password && !password.value) password.value = 'admin';
+});
+</script>
+{% endblock %}
