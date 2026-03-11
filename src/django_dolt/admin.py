@@ -10,6 +10,7 @@ from __future__ import annotations
 from typing import Any, cast
 
 from django.contrib import admin, messages
+from django.core.exceptions import PermissionDenied
 from django.http import HttpRequest, HttpResponse, HttpResponseRedirect
 from django.template.response import TemplateResponse
 from django.urls import URLPattern, path, reverse
@@ -700,6 +701,8 @@ def _make_status_view(db_alias: str):
 
     def status_view(request: HttpRequest) -> HttpResponse:
         if request.method == "POST":
+            if not request.user.is_superuser:
+                raise PermissionDenied
             message = request.POST.get("message", "Manual commit")
             author = _get_author(request)
             try:
@@ -749,6 +752,7 @@ def _make_status_view(db_alias: str):
             "db_display": db_display,
             "current_branch": current_branch,
             "status": status,
+            "can_commit": request.user.is_superuser,
             "commits": commits,
         }
         return TemplateResponse(

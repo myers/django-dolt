@@ -42,12 +42,16 @@
             </tbody>
         </table>
 
+        {% if can_commit %}
         <form method="post" style="padding: 10px; display: flex; gap: 8px; align-items: center;">
             {% csrf_token %}
             <input type="text" name="message" placeholder="Commit message..." required
                    style="flex: 1; padding: 6px 10px;">
             <input type="submit" value="Commit" class="default">
         </form>
+        {% else %}
+        <p class="quiet" style="padding: 10px;">{% translate "You must be a superuser to commit changes." %}</p>
+        {% endif %}
         {% else %}
         <p class="quiet" style="padding: 10px;">{% translate "No uncommitted changes." %}</p>
         {% endif %}

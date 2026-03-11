@@ -5,6 +5,7 @@ from django.contrib.auth.decorators import login_required
 from django.http import HttpRequest, HttpResponse, HttpResponseRedirect
 from django.shortcuts import get_object_or_404, render
 from django.urls import reverse
+from django.utils.http import url_has_allowed_host_and_scheme
 
 import django_dolt
 from django_dolt import dolt_add_and_commit, dolt_log, dolt_status
@@ -110,8 +111,8 @@ def dolt_commit(request: HttpRequest, db_alias: str) -> HttpResponse:
         messages.error(request, f"Commit failed: {e}")
 
     # Redirect to 'next' param if provided, otherwise back to dashboard
-    next_url = request.POST.get("next")
-    if next_url:
+    next_url = request.POST.get("next", "")
+    if next_url and url_has_allowed_host_and_scheme(next_url, allowed_hosts={request.get_host()}):
         return HttpResponseRedirect(next_url)
     if db_alias == "inventory":
         return HttpResponseRedirect(reverse("inventory"))

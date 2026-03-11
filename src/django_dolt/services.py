@@ -201,7 +201,8 @@ def dolt_diff(
     with conn.cursor() as cursor:
         if table:
             cursor.execute(
-                f"SELECT * FROM dolt_diff('{from_ref}', '{to_ref}', '{table}')"  # noqa: S608
+                "SELECT * FROM dolt_diff(%s, %s, %s)",
+                [from_ref, to_ref, table],
             )
         else:
             cursor.execute(
