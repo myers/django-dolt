@@ -20,3 +20,6 @@ uv.lock
 .mypy_cache/
 .pytest_cache/
 .ruff_cache/
+
+# Demo database
+demo/db.sqlite3
