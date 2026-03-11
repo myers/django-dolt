@@ -6,6 +6,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 from django.db import connections
 
+from django_dolt.tests import quote_id
 from django_dolt.admin import (
     DoltMultiDBAdminMixin,
     _branch_extensions,
@@ -120,8 +121,8 @@ def multi_dolt_dbs(django_db_blocker: object) -> Generator[list[str], None, None
         conn = connections["dolt"]
         for db_name in ("test_dolt1", "test_dolt2"):
             with conn.cursor() as cursor:
-                cursor.execute(f"DROP DATABASE IF EXISTS `{db_name}`")
-                cursor.execute(f"CREATE DATABASE `{db_name}`")
+                cursor.execute(quote_id(conn, "DROP DATABASE IF EXISTS %s", db_name))
+                cursor.execute(quote_id(conn, "CREATE DATABASE %s", db_name))
 
         for alias in ("dolt1", "dolt2"):
             connections[alias].close()
@@ -132,7 +133,7 @@ def multi_dolt_dbs(django_db_blocker: object) -> Generator[list[str], None, None
             connections[alias].close()
         for db_name in ("test_dolt1", "test_dolt2"):
             with conn.cursor() as cursor:
-                cursor.execute(f"DROP DATABASE IF EXISTS `{db_name}`")
+                cursor.execute(quote_id(conn, "DROP DATABASE IF EXISTS %s", db_name))
 
 
 class TestMultiDatabaseIntegration:
@@ -253,6 +254,64 @@ class TestDoltMultiDBAdminMixin:
         assert "Commits" in model_names
         assert "Remotes" in model_names
         assert "Status" in model_names
+
+    def test_get_app_list_passthrough_when_no_dolt_models(self) -> None:
+        """When dolt_app has no models, app_list is returned unchanged."""
+        from django.contrib.admin import AdminSite
+
+        class TestSite(DoltMultiDBAdminMixin, AdminSite):
+            pass
+
+        site = TestSite()
+
+        fake_app_list = [
+            {
+                "app_label": "django_dolt",
+                "app_url": "/admin/django_dolt/",
+                "has_module_perms": True,
+                "models": [],
+            },
+            {
+                "app_label": "auth",
+                "app_url": "/admin/auth/",
+                "has_module_perms": True,
+                "models": [{"object_name": "User", "name": "Users"}],
+            },
+        ]
+
+        with patch.object(
+            AdminSite, "get_app_list", return_value=fake_app_list
+        ):
+            request = MagicMock()
+            result = site.get_app_list(request)
+
+        assert result is fake_app_list
+
+    def test_get_app_list_passthrough_when_no_dolt_app(self) -> None:
+        """When there is no django_dolt app at all, app_list is returned unchanged."""
+        from django.contrib.admin import AdminSite
+
+        class TestSite(DoltMultiDBAdminMixin, AdminSite):
+            pass
+
+        site = TestSite()
+
+        fake_app_list = [
+            {
+                "app_label": "auth",
+                "app_url": "/admin/auth/",
+                "has_module_perms": True,
+                "models": [{"object_name": "User", "name": "Users"}],
+            },
+        ]
+
+        with patch.object(
+            AdminSite, "get_app_list", return_value=fake_app_list
+        ):
+            request = MagicMock()
+            result = site.get_app_list(request)
+
+        assert result is fake_app_list
 
 
 class TestRegisterBranchExtension:

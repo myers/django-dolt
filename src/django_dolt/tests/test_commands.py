@@ -152,6 +152,27 @@ class TestDoltSyncCommand:
         assert "No changes to commit" in output
 
     @patch("django_dolt.management.commands.dolt_sync.services")
+    def test_sync_commit_returns_none_after_staging(
+        self, mock_services: MagicMock
+    ) -> None:
+        """When add_and_commit returns None despite status showing changes, exits early."""
+        mock_services.dolt_status.return_value = [
+            {"table_name": "t", "staged": 0, "status": "modified"},
+        ]
+        mock_services.format_status_rows.return_value = "  unstaged: t (modified)"
+        mock_services.dolt_add_and_commit.return_value = None
+        mock_services.DoltError = Exception
+        mock_services.DoltCommitError = Exception
+        mock_services.DoltPushError = Exception
+
+        out = StringIO()
+        call_command("dolt_sync", "--no-push", stdout=out)
+        output = out.getvalue()
+
+        assert "No changes to commit after staging" in output
+        mock_services.dolt_push.assert_not_called()
+
+    @patch("django_dolt.management.commands.dolt_sync.services")
     def test_sync_force_push(self, mock_services: MagicMock) -> None:
         mock_services.dolt_status.return_value = [
             {"table_name": "t", "staged": 0, "status": "modified"},

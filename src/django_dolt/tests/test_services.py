@@ -7,6 +7,7 @@ import pytest
 from django.db import connections
 
 from django_dolt import services
+from django_dolt.tests import quote_id
 
 
 # All tests in this module need database access
@@ -30,8 +31,8 @@ def dolt_db(django_db_blocker: object) -> Generator[str, None, None]:
         conn = connections["dolt"]
         db_name = "test_services"
         with conn.cursor() as cursor:
-            cursor.execute(f"DROP DATABASE IF EXISTS `{db_name}`")
-            cursor.execute(f"CREATE DATABASE `{db_name}`")
+            cursor.execute(quote_id(conn, "DROP DATABASE IF EXISTS %s", db_name))
+            cursor.execute(quote_id(conn, "CREATE DATABASE %s", db_name))
 
         # Point dolt1 alias at our test db
         old_name = connections.databases["dolt1"]["NAME"]
@@ -43,7 +44,7 @@ def dolt_db(django_db_blocker: object) -> Generator[str, None, None]:
         connections.databases["dolt1"]["NAME"] = old_name
         connections["dolt1"].close()
         with conn.cursor() as cursor:
-            cursor.execute(f"DROP DATABASE IF EXISTS `{db_name}`")
+            cursor.execute(quote_id(conn, "DROP DATABASE IF EXISTS %s", db_name))
 
 
 class TestDoltAdd:

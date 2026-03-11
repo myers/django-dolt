@@ -251,10 +251,17 @@ def dolt_status(
 def dolt_log(
     limit: int = 50, *, using: str | None = None
 ) -> list[dict[str, Any]]:
-    """Get recent commit history."""
+    """Get recent commit history.
+
+    Raises:
+        DoltError: If the log query fails
+    """
     from django_dolt import models
 
-    return models.Commit.objects.recent(limit=limit, using=using)
+    try:
+        return models.Commit.objects.recent(limit=limit, using=using)
+    except Exception as e:
+        raise DoltError(f"Failed to get log: {e}") from e
 
 
 def dolt_diff(
@@ -264,46 +271,81 @@ def dolt_diff(
     *,
     using: str | None = None,
 ) -> list[dict[str, Any]]:
-    """Get diff between two refs."""
+    """Get diff between two refs.
+
+    Raises:
+        DoltError: If the diff query fails
+    """
     from django_dolt import models
 
-    return models.dolt_diff(from_ref, to_ref, table, using=using)
+    try:
+        return models.dolt_diff(from_ref, to_ref, table, using=using)
+    except Exception as e:
+        raise DoltError(f"Failed to get diff: {e}") from e
 
 
 def dolt_branch_list(
     *, using: str | None = None
 ) -> list[str]:
-    """Get list of branch names."""
+    """Get list of branch names.
+
+    Raises:
+        DoltError: If the branch list query fails
+    """
     from django_dolt import models
 
-    return models.Branch.objects.names(using=using)
+    try:
+        return models.Branch.objects.names(using=using)
+    except Exception as e:
+        raise DoltError(f"Failed to list branches: {e}") from e
 
 
 def dolt_current_branch(
     *, using: str | None = None
 ) -> str:
-    """Get the current branch name."""
+    """Get the current branch name.
+
+    Raises:
+        DoltError: If the active branch query fails
+    """
     from django_dolt import models
 
-    return models.Branch.objects.active_branch(using=using)
+    try:
+        return models.Branch.objects.active_branch(using=using)
+    except Exception as e:
+        raise DoltError(f"Failed to get current branch: {e}") from e
 
 
 def get_ignored_tables(
     *, using: str | None = None
 ) -> list[str]:
-    """Get list of ignored table patterns from dolt_ignore."""
+    """Get list of ignored table patterns from dolt_ignore.
+
+    Raises:
+        DoltError: If the ignore query fails
+    """
     from django_dolt import models
 
-    return models.Ignore.objects.patterns(using=using)
+    try:
+        return models.Ignore.objects.patterns(using=using)
+    except Exception as e:
+        raise DoltError(f"Failed to get ignored tables: {e}") from e
 
 
 def dolt_remotes(
     *, using: str | None = None
 ) -> list[dict[str, Any]]:
-    """Get list of configured remotes."""
+    """Get list of configured remotes.
+
+    Raises:
+        DoltError: If the remotes query fails
+    """
     from django_dolt import models
 
-    return models.Remote.objects.all_remotes(using=using)
+    try:
+        return models.Remote.objects.all_remotes(using=using)
+    except Exception as e:
+        raise DoltError(f"Failed to get remotes: {e}") from e
 
 
 # ---------------------------------------------------------------------------
