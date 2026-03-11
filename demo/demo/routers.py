@@ -40,10 +40,19 @@ class DemoRouter:
         self, db: str, app_label: str, model_name: str | None = None, **hints: Any
     ) -> bool | None:
         """Control which models can be migrated to which database."""
-        # Demo app models are managed via setup_demo, not Django migrations
-        if app_label == "demo_app":
-            return False
-        # Default apps go to default database
+        if app_label == "demo_app" and model_name:
+            # Route demo_app models to their Dolt database based on db_table prefix
+            from django.apps import apps
+
+            try:
+                model = apps.get_model(app_label, model_name)
+            except LookupError:
+                return None
+            target_db = self._get_db_for_model(model)
+            if target_db:
+                return db == target_db
+            return None
+        # Default apps go to default database only
         if db == "default":
-            return True
-        return False
+            return app_label != "demo_app"
+        return None

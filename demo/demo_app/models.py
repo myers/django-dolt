@@ -51,6 +51,26 @@ class Product(models.Model):
         return f"{self.sku} - {self.name}"
 
 
+class ProductComment(models.Model):
+    """Comment on a product, used to demo @dolt_autocommit."""
+
+    product = models.ForeignKey(
+        Product,
+        on_delete=models.CASCADE,
+        related_name="comments",
+    )
+    author = models.CharField(max_length=200)
+    body = models.TextField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "inventory_productcomment"
+        ordering = ["-created_at"]
+
+    def __str__(self) -> str:
+        return f"Comment by {self.author} on {self.product.sku}"
+
+
 # =============================================================================
 # Order Models (stored in orders Dolt database)
 # =============================================================================

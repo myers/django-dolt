@@ -4,7 +4,7 @@ from django.contrib import admin
 
 from django_dolt.admin import DoltCommitMixin
 
-from .models import Category, Customer, Order, OrderItem, Product
+from .models import Category, Customer, Order, OrderItem, Product, ProductComment
 
 
 # =============================================================================
@@ -27,6 +27,15 @@ class ProductAdmin(DoltCommitMixin, admin.ModelAdmin):  # type: ignore[type-arg]
     list_display = ["sku", "name", "category", "price", "quantity_in_stock"]
     list_filter = ["category"]
     search_fields = ["sku", "name"]
+
+
+@admin.register(ProductComment)
+class ProductCommentAdmin(DoltCommitMixin, admin.ModelAdmin):  # type: ignore[type-arg]
+    """Admin for product comments."""
+
+    list_display = ["product", "author", "body", "created_at"]
+    list_filter = ["author"]
+    search_fields = ["body", "author"]
 
 
 # =============================================================================

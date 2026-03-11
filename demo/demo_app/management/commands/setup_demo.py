@@ -73,73 +73,10 @@ class Command(BaseCommand):
         from django.core.management import call_command
 
         self.stdout.write("Running migrations...")
-
-        # Create tables directly since Dolt doesn't need Django migrations
-        # for these simple models
-
-        # Inventory tables
-        with connections["inventory"].cursor() as cursor:
-            cursor.execute("""
-                CREATE TABLE IF NOT EXISTS inventory_category (
-                    id BIGINT AUTO_INCREMENT PRIMARY KEY,
-                    name VARCHAR(100) NOT NULL,
-                    description TEXT,
-                    created_at DATETIME NOT NULL
-                )
-            """)
-            cursor.execute("""
-                CREATE TABLE IF NOT EXISTS inventory_product (
-                    id BIGINT AUTO_INCREMENT PRIMARY KEY,
-                    sku VARCHAR(50) UNIQUE NOT NULL,
-                    name VARCHAR(200) NOT NULL,
-                    description TEXT,
-                    category_id BIGINT NOT NULL,
-                    price DECIMAL(10, 2) NOT NULL,
-                    quantity_in_stock INT DEFAULT 0,
-                    created_at DATETIME NOT NULL,
-                    updated_at DATETIME NOT NULL,
-                    FOREIGN KEY (category_id) REFERENCES inventory_category(id)
-                )
-            """)
-        self.stdout.write("  Created inventory tables")
-
-        # Orders tables
-        with connections["orders"].cursor() as cursor:
-            cursor.execute("""
-                CREATE TABLE IF NOT EXISTS orders_customer (
-                    id BIGINT AUTO_INCREMENT PRIMARY KEY,
-                    email VARCHAR(254) UNIQUE NOT NULL,
-                    first_name VARCHAR(100) NOT NULL,
-                    last_name VARCHAR(100) NOT NULL,
-                    phone VARCHAR(20),
-                    created_at DATETIME NOT NULL
-                )
-            """)
-            cursor.execute("""
-                CREATE TABLE IF NOT EXISTS orders_order (
-                    id BIGINT AUTO_INCREMENT PRIMARY KEY,
-                    customer_id BIGINT NOT NULL,
-                    order_number VARCHAR(50) UNIQUE NOT NULL,
-                    status VARCHAR(20) NOT NULL DEFAULT 'pending',
-                    total_amount DECIMAL(10, 2) DEFAULT 0,
-                    notes TEXT,
-                    created_at DATETIME NOT NULL,
-                    updated_at DATETIME NOT NULL,
-                    FOREIGN KEY (customer_id) REFERENCES orders_customer(id)
-                )
-            """)
-            cursor.execute("""
-                CREATE TABLE IF NOT EXISTS orders_orderitem (
-                    id BIGINT AUTO_INCREMENT PRIMARY KEY,
-                    order_id BIGINT NOT NULL,
-                    product_sku VARCHAR(50) NOT NULL,
-                    product_name VARCHAR(200) NOT NULL,
-                    quantity INT DEFAULT 1,
-                    unit_price DECIMAL(10, 2) NOT NULL,
-                    FOREIGN KEY (order_id) REFERENCES orders_order(id)
-                )
-            """)
-        self.stdout.write("  Created orders tables")
+        call_command("migrate", "demo_app", database="inventory", verbosity=0)
+        self.stdout.write("  Migrated inventory database")
+        call_command("migrate", "demo_app", database="orders", verbosity=0)
+        self.stdout.write("  Migrated orders database")
 
     def _create_inventory_data(self) -> None:
         """Create sample inventory data."""
