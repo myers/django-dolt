@@ -75,12 +75,14 @@ class TestDoltSyncCommand:
     """Tests for the dolt_sync management command."""
 
     @patch("django_dolt.management.commands.dolt_sync.services")
-    def test_sync_stages_and_commits(self, mock_services: MagicMock) -> None:
+    def test_sync_stages_and_commits_with_tables(
+        self, mock_services: MagicMock
+    ) -> None:
         mock_services.dolt_status.return_value = [
             {"table_name": "products", "staged": 0, "status": "modified"},
         ]
         mock_services.format_status_rows.return_value = (
-            "  modified: products (modified)"
+            "  unstaged: products (modified)"
         )
         mock_services.dolt_commit.return_value = "abc12345678"
         mock_services.DoltError = Exception
@@ -88,23 +90,53 @@ class TestDoltSyncCommand:
         mock_services.DoltPushError = Exception
 
         out = StringIO()
-        call_command("dolt_sync", "test commit", "--no-push", stdout=out)
+        call_command(
+            "dolt_sync", "test commit", "--no-push",
+            "--tables", "products", stdout=out,
+        )
 
         mock_services.dolt_add.assert_called_with("products", using=None)
         mock_services.dolt_commit.assert_called_once()
+
+    @patch("django_dolt.management.commands.dolt_sync.services")
+    def test_sync_uses_add_and_commit_without_tables(
+        self, mock_services: MagicMock
+    ) -> None:
+        """Without --tables, dolt_sync uses atomic dolt_add_and_commit."""
+        mock_services.dolt_status.return_value = [
+            {"table_name": "products", "staged": 0, "status": "modified"},
+        ]
+        mock_services.format_status_rows.return_value = (
+            "  unstaged: products (modified)"
+        )
+        mock_services.dolt_add_and_commit.return_value = "abc12345678"
+        mock_services.DoltError = Exception
+        mock_services.DoltCommitError = Exception
+        mock_services.DoltPushError = Exception
+
+        out = StringIO()
+        call_command("dolt_sync", "--no-push", stdout=out)
+        output = out.getvalue()
+
+        mock_services.dolt_add_and_commit.assert_called_once()
+        # Should have auto-generated a timestamp message
+        call_args = mock_services.dolt_add_and_commit.call_args
+        assert "Database update at" in call_args[0][0]
+        mock_services.dolt_add.assert_not_called()
+        assert "Committed" in output
 
     @patch("django_dolt.management.commands.dolt_sync.services")
     def test_sync_no_push_flag(self, mock_services: MagicMock) -> None:
         mock_services.dolt_status.return_value = [
             {"table_name": "t", "staged": 0, "status": "modified"},
         ]
-        mock_services.format_status_rows.return_value = "  modified: t (modified)"
+        mock_services.format_status_rows.return_value = "  unstaged: t (modified)"
         mock_services.dolt_commit.return_value = "abc12345678"
         mock_services.DoltError = Exception
         mock_services.DoltCommitError = Exception
 
         out = StringIO()
-        call_command("dolt_sync", "msg", "--no-push", stdout=out)
+        call_command("dolt_sync", "msg", "--no-push", "--tables", "t", stdout=out)
 
         mock_services.dolt_push.assert_not_called()
 
@@ -124,7 +156,7 @@ class TestDoltSyncCommand:
         mock_services.dolt_status.return_value = [
             {"table_name": "t", "staged": 0, "status": "modified"},
         ]
-        mock_services.format_status_rows.return_value = "  modified: t (modified)"
+        mock_services.format_status_rows.return_value = "  unstaged: t (modified)"
         mock_services.dolt_commit.return_value = "abc12345678"
         mock_services.dolt_push.return_value = "Pushed"
         mock_services.DoltError = Exception
@@ -132,7 +164,7 @@ class TestDoltSyncCommand:
         mock_services.DoltPushError = Exception
 
         out = StringIO()
-        call_command("dolt_sync", "msg", "--force", stdout=out)
+        call_command("dolt_sync", "msg", "--force", "--tables", "t", stdout=out)
 
         mock_services.dolt_push.assert_called_with(force=True, using=None)
 

@@ -78,36 +78,43 @@ class Command(BaseCommand):
         if message:
             self.stdout.write(f"   Message: {message}")
 
-        # Determine which tables to stage
-        tables_to_stage = tables or [row["table_name"] for row in status]
-
-        # Stage tables
-        for table in tables_to_stage:
-            try:
-                services.dolt_add(table, using=using)
-                self.stdout.write(f"  Staged: {table}")
-            except services.DoltError as e:
-                self.stdout.write(f"  Note: Could not stage {table}: {e}")
-
         # Create commit message if not provided
         if message is None:
             timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             message = f"Database update at {timestamp}"
 
-        # Commit
-        try:
-            commit_hash = services.dolt_commit(message, author=author, using=using)
-            if commit_hash:
-                self.stdout.write(
-                    self.style.SUCCESS(
-                        f"Committed: {message} (commit: {commit_hash[:8]})"
-                    )
-                )
-            else:
-                self.stdout.write("No changes to commit after staging")
+        if tables:
+            # Explicit tables: stage each one, then commit
+            for table in tables:
+                try:
+                    services.dolt_add(table, using=using)
+                    self.stdout.write(f"  Staged: {table}")
+                except services.DoltError as e:
+                    self.stdout.write(f"  Note: Could not stage {table}: {e}")
+
+            try:
+                commit_hash = services.dolt_commit(message, author=author, using=using)
+            except services.DoltCommitError as e:
+                self.stdout.write(self.style.ERROR(f"Commit failed: {e}"))
                 return
-        except services.DoltCommitError as e:
-            self.stdout.write(self.style.ERROR(f"Commit failed: {e}"))
+        else:
+            # No explicit tables: atomic stage-all + commit
+            try:
+                commit_hash = services.dolt_add_and_commit(
+                    message, author=author, using=using
+                )
+            except services.DoltCommitError as e:
+                self.stdout.write(self.style.ERROR(f"Commit failed: {e}"))
+                return
+
+        if commit_hash:
+            self.stdout.write(
+                self.style.SUCCESS(
+                    f"Committed: {message} (commit: {commit_hash[:8]})"
+                )
+            )
+        else:
+            self.stdout.write("No changes to commit after staging")
             return
 
         if not no_push:

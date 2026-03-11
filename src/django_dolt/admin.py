@@ -111,14 +111,14 @@ class DoltAdminMixin:
             dolt_urls.append(
                 path(
                     f"dolt/status/{db_alias}/",
-                    self.admin_view(_make_status_view(db_alias)),  # type: ignore[attr-defined]
+                    self.admin_view(_make_status_view(db_alias, site=self)),  # type: ignore[attr-defined, arg-type]
                     name=f"dolt_status_{db_alias}",
                 )
             )
             dolt_urls.append(
                 path(
                     f"dolt/status/{db_alias}/diff/<str:table_name>/",
-                    self.admin_view(_make_diff_view(db_alias)),  # type: ignore[attr-defined]
+                    self.admin_view(_make_diff_view(db_alias, site=self)),  # type: ignore[attr-defined, arg-type]
                     name=f"dolt_diff_{db_alias}",
                 )
             )
@@ -359,8 +359,9 @@ def register_dolt_admin(db_alias: str, site: admin.AdminSite | None = None) -> N
     target_site.register(RemoteProxy, DynamicRemoteAdmin)
 
 
-def _make_status_view(db_alias: str) -> Any:
+def _make_status_view(db_alias: str, site: admin.AdminSite | None = None) -> Any:
     """Create a status view function for a specific database."""
+    admin_site = site or admin.site
 
     def status_view(request: HttpRequest) -> HttpResponse:
         if request.method == "POST":
@@ -369,8 +370,7 @@ def _make_status_view(db_alias: str) -> Any:
             message = request.POST.get("message", "Manual commit")
             author = get_author_from_request(request)
             try:
-                services.dolt_add(".", using=db_alias)
-                result = services.dolt_commit(
+                result = services.dolt_add_and_commit(
                     message=message,
                     author=author,
                     using=db_alias,
@@ -380,11 +380,7 @@ def _make_status_view(db_alias: str) -> Any:
                 else:
                     messages.info(request, f"No changes to commit in {db_alias}")
             except services.DoltError as e:
-                err_msg = str(e)
-                if "nothing to commit" in err_msg.lower():
-                    messages.info(request, f"No changes to commit in {db_alias}")
-                else:
-                    messages.error(request, f"Commit failed: {e}")
+                messages.error(request, f"Commit failed: {e}")
             return HttpResponseRedirect(reverse("admin:dolt_status_" + db_alias))
 
         # GET: show status
@@ -414,7 +410,7 @@ def _make_status_view(db_alias: str) -> Any:
 
         db_display = db_alias.replace("_", " ").title()
         context = {
-            **admin.site.each_context(request),
+            **admin_site.each_context(request),
             "title": f"{db_display} — Dolt Status",
             "db_alias": db_alias,
             "db_display": db_display,
@@ -428,8 +424,9 @@ def _make_status_view(db_alias: str) -> Any:
     return status_view
 
 
-def _make_diff_view(db_alias: str) -> Any:
+def _make_diff_view(db_alias: str, site: admin.AdminSite | None = None) -> Any:
     """Create a table diff view function for a specific database."""
+    admin_site = site or admin.site
 
     def diff_view(request: HttpRequest, table_name: str) -> HttpResponse:
         if request.method != "GET":
@@ -484,7 +481,7 @@ def _make_diff_view(db_alias: str) -> Any:
         db_display = db_alias.replace("_", " ").title()
         status_url = reverse("admin:dolt_status_" + db_alias)
         context = {
-            **admin.site.each_context(request),
+            **admin_site.each_context(request),
             "title": f"{db_display} — Diff: {table_name}",
             "db_alias": db_alias,
             "db_display": db_display,

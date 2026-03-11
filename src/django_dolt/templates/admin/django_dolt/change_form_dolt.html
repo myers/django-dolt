@@ -2,6 +2,11 @@
 
 {% block after_related_objects %}
 {{ block.super }}
+<style>
+.dolt-commit-btn {
+    background: #275C3A;
+}
+</style>
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     var row = document.querySelector('.submit-row');
@@ -12,7 +17,7 @@ document.addEventListener('DOMContentLoaded', function() {
     btn.type = 'submit';
     btn.value = 'Save and commit';
     btn.name = '_save_and_commit';
-    btn.style.background = '#275C3A';
+    btn.className = 'dolt-commit-btn';
     btn.title = 'Save changes and create a Dolt commit';
     save.after(btn);
 });

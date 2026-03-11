@@ -419,7 +419,7 @@ class TestFormatStatusRows:
     def test_single_modified_row(self) -> None:
         rows = [{"table_name": "users", "staged": 0, "status": "modified"}]
         result = services.format_status_rows(rows)
-        assert "modified: users (modified)" in result
+        assert "unstaged: users (modified)" in result
 
     def test_staged_row(self) -> None:
         rows = [{"table_name": "orders", "staged": 1, "status": "new table"}]

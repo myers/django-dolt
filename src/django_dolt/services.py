@@ -326,7 +326,7 @@ def format_status_rows(
     output = []
     for row in status_rows:
         staged = (
-            "staged" if row.get("staged", 0) else "modified"
+            "staged" if row.get("staged", 0) else "unstaged"
         )
         table = row.get("table_name", "unknown")
         status = row.get("status", "")

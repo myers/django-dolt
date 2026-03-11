@@ -27,7 +27,7 @@ if TYPE_CHECKING:
 
 def dolt_add(table: str = ".", *, using: str | None = None) -> None:
     """Execute ``CALL DOLT_ADD(table)``."""
-    with connections[using or "default"].cursor() as cursor:
+    with connections[using if using is not None else "default"].cursor() as cursor:
         cursor.execute("CALL DOLT_ADD(%s)", [table])
 
 
@@ -43,7 +43,7 @@ def dolt_commit(
 
     Returns ``None`` when there is nothing to commit.
     """
-    with connections[using or "default"].cursor() as cursor:
+    with connections[using if using is not None else "default"].cursor() as cursor:
         args: list[str] = []
         if stage_all:
             args.append("-A")
@@ -63,7 +63,7 @@ def dolt_add_remote(
     name: str, url: str, *, using: str | None = None
 ) -> None:
     """Execute ``CALL DOLT_REMOTE('add', name, url)``."""
-    with connections[using or "default"].cursor() as cursor:
+    with connections[using if using is not None else "default"].cursor() as cursor:
         cursor.execute(
             "CALL DOLT_REMOTE('add', %s, %s)", [name, url]
         )
@@ -73,7 +73,7 @@ def dolt_push(
     args: list[str], *, using: str | None = None
 ) -> None:
     """Execute ``CALL DOLT_PUSH(...)``."""
-    with connections[using or "default"].cursor() as cursor:
+    with connections[using if using is not None else "default"].cursor() as cursor:
         placeholders = ", ".join(["%s"] * len(args))
         cursor.execute(  # noqa: S608
             f"CALL DOLT_PUSH({placeholders})", args
@@ -84,7 +84,7 @@ def dolt_pull(
     args: list[str], *, using: str | None = None
 ) -> tuple[Any, ...] | None:
     """Execute ``CALL DOLT_PULL(...)`` and return the result row."""
-    with connections[using or "default"].cursor() as cursor:
+    with connections[using if using is not None else "default"].cursor() as cursor:
         placeholders = ", ".join(["%s"] * len(args))
         cursor.execute(  # noqa: S608
             f"CALL DOLT_PULL({placeholders})", args
@@ -96,7 +96,7 @@ def dolt_fetch(
     args: list[str], *, using: str | None = None
 ) -> None:
     """Execute ``CALL DOLT_FETCH(...)``."""
-    with connections[using or "default"].cursor() as cursor:
+    with connections[using if using is not None else "default"].cursor() as cursor:
         placeholders = ", ".join(["%s"] * len(args))
         cursor.execute(  # noqa: S608
             f"CALL DOLT_FETCH({placeholders})", args
@@ -115,7 +115,7 @@ def dolt_diff(
     These are table-valued functions with dynamic schemas, so raw
     SQL is required.
     """
-    with connections[using or "default"].cursor() as cursor:
+    with connections[using if using is not None else "default"].cursor() as cursor:
         if table:
             cursor.execute(
                 "SELECT * FROM dolt_diff(%s, %s, %s)",
@@ -154,7 +154,7 @@ class BranchManager(models.Manager["Branch"]):
         Uses the Dolt SQL function ``active_branch()`` which has no
         table equivalent, so raw SQL is required here.
         """
-        with connections[using or "default"].cursor() as cursor:
+        with connections[using if using is not None else "default"].cursor() as cursor:
             cursor.execute("SELECT active_branch()")
             result = cursor.fetchone()
             return str(result[0]) if result else "main"
@@ -194,7 +194,7 @@ class StatusManager(models.Manager["Status"]):
         with ``LIKE`` matching against ``dolt_ignore``, which cannot
         be cleanly expressed in the ORM, so raw SQL is used here.
         """
-        with connections[using or "default"].cursor() as cursor:
+        with connections[using if using is not None else "default"].cursor() as cursor:
             if exclude_ignored:
                 try:
                     cursor.execute("""
@@ -437,6 +437,11 @@ def create_proxy_models(db_alias: str) -> "ProxyModelTuple":
     result = (BranchProxy, CommitProxy, RemoteProxy)
     _proxy_model_registry[db_alias] = result
     return result
+
+
+def reset_proxy_model_registry() -> None:
+    """Clear the proxy model registry. Intended for testing only."""
+    _proxy_model_registry.clear()
 
 
 def get_proxy_models(db_alias: str) -> "ProxyModelTuple | None":

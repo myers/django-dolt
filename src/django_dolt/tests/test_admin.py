@@ -7,10 +7,12 @@ from django.contrib.auth.models import User
 from django.test import RequestFactory, TestCase
 
 from django_dolt.admin import (
+    DoltAdminMixin,
     DoltCommitMixin,
     ReadOnlyModelAdmin,
     _make_diff_view,
     _make_status_view,
+    register_dolt_admin,
 )
 
 
@@ -126,10 +128,9 @@ class TestMakeStatusView(TestCase):
         assert response.template_name == "admin/django_dolt/status.html"
 
     @patch("django_dolt.admin.reverse", return_value="/admin/dolt/status/testdb/")
-    @patch("django_dolt.admin.services.dolt_commit", return_value="abcdef12")
-    @patch("django_dolt.admin.services.dolt_add")
+    @patch("django_dolt.admin.services.dolt_add_and_commit", return_value="abcdef12")
     def test_post_commits_as_superuser(
-        self, mock_add: MagicMock, mock_commit: MagicMock, mock_reverse: MagicMock
+        self, mock_commit: MagicMock, mock_reverse: MagicMock
     ) -> None:
         view = _make_status_view("testdb")
         request = self.factory.post("/", {"message": "test commit"})
@@ -154,12 +155,11 @@ class TestMakeStatusView(TestCase):
             view(request)
 
     @patch("django_dolt.admin.reverse", return_value="/admin/dolt/status/testdb/")
-    @patch("django_dolt.admin.services.dolt_commit", return_value=None)
-    @patch("django_dolt.admin.services.dolt_add")
+    @patch("django_dolt.admin.services.dolt_add_and_commit", return_value=None)
     def test_post_handles_none_result(
-        self, mock_add: MagicMock, mock_commit: MagicMock, mock_reverse: MagicMock
+        self, mock_commit: MagicMock, mock_reverse: MagicMock
     ) -> None:
-        """When dolt_commit returns None, should show info message not crash."""
+        """When dolt_add_and_commit returns None, should show info message not crash."""
         view = _make_status_view("testdb")
         request = self.factory.post("/", {"message": "test commit"})
         request.user = self.superuser
@@ -316,3 +316,58 @@ class TestDoltCommitMixinResponseAdd(TestCase):
             model_admin.response_change(request, obj)
 
         mock_commit.assert_called_once()
+
+
+@pytest.mark.django_db
+class TestRegisterDoltAdmin(TestCase):
+    """Test register_dolt_admin registers correct admin classes."""
+
+    def test_registers_branch_commit_remote(self) -> None:
+        """register_dolt_admin should register proxy models on the given site."""
+        from django.contrib.admin import AdminSite
+
+        site = AdminSite(name="test_register")
+        register_dolt_admin("testdb", site=site)
+
+        # Should have 3 models registered
+        assert len(site._registry) == 3
+        # Check model names
+        model_names = {m.__name__ for m in site._registry}
+        assert "Branch_testdb" in model_names
+        assert "Commit_testdb" in model_names
+        assert "Remote_testdb" in model_names
+
+    def test_queryset_uses_db_alias(self) -> None:
+        """Admin queryset should be bound to the correct db alias."""
+        from django.contrib.admin import AdminSite
+
+        site = AdminSite(name="test_qs")
+        register_dolt_admin("myalias", site=site)
+
+        for _model, model_admin in site._registry.items():
+            request = RequestFactory().get("/")
+            request.user = MagicMock()
+            qs = model_admin.get_queryset(request)
+            assert qs.db == "myalias"
+
+
+@pytest.mark.django_db
+class TestDoltAdminMixinGetUrls(TestCase):
+    """Test DoltAdminMixin generates status/diff URLs per database."""
+
+    @patch("django_dolt.admin.get_dolt_databases", return_value=["db1", "db2"])
+    def test_generates_urls_per_database(self, mock_dbs: MagicMock) -> None:
+        """get_urls should create status and diff URL patterns for each db."""
+        from django.contrib.admin import AdminSite
+
+        class TestSite(DoltAdminMixin, AdminSite):  # type: ignore[misc]
+            pass
+
+        site = TestSite(name="test_urls")
+        urls = site.get_urls()
+
+        url_names = [u.name for u in urls if hasattr(u, "name")]
+        assert "dolt_status_db1" in url_names
+        assert "dolt_status_db2" in url_names
+        assert "dolt_diff_db1" in url_names
+        assert "dolt_diff_db2" in url_names
