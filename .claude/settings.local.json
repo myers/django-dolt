@@ -21,7 +21,9 @@
       "Bash(pytest:*)",
       "WebFetch(domain:docs.dolthub.com)",
       "Bash(bin/test:*)",
-      "Bash(git status:*)"
+      "Bash(git status:*)",
+      "Bash(ruff check:*)",
+      "Bash(docker compose:*)"
     ]
   },
   "enableAllProjectMcpServers": true,
