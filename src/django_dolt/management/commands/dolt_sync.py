@@ -86,11 +86,8 @@ class Command(BaseCommand):
         if tables:
             # Explicit tables: stage each one, then commit
             for table in tables:
-                try:
-                    services.dolt_add(table, using=using)
-                    self.stdout.write(f"  Staged: {table}")
-                except services.DoltError as e:
-                    self.stdout.write(f"  Note: Could not stage {table}: {e}")
+                services.dolt_add(table, using=using)
+                self.stdout.write(f"  Staged: {table}")
 
             try:
                 commit_hash = services.dolt_commit(message, author=author, using=using)

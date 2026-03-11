@@ -8,8 +8,10 @@ django-dolt is a Django integration package for Dolt version-controlled database
 
 ## Development Commands
 
+We use `uv` exclusively for Python package management. Never use `pip` directly.
+
 ```bash
-pip install -e ".[dev]"           # Install dev dependencies
+uv pip install -e ".[dev]"        # Install dev dependencies
 
 bin/test                           # Run all tests (auto-starts Dolt Docker container)
 bin/test src/django_dolt/tests/test_services.py

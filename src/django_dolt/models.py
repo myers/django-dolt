@@ -8,12 +8,9 @@ procedures (``CALL DOLT_*``). Business logic and error handling live in
 the services layer.
 """
 
-import logging
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 from django.db import connections, models
-
-logger = logging.getLogger("django_dolt")
 
 if TYPE_CHECKING:
     # Type for the tuple of proxy model classes - use Any for dynamic classes
@@ -89,7 +86,8 @@ def dolt_pull(
         cursor.execute(  # noqa: S608
             f"CALL DOLT_PULL({placeholders})", args
         )
-        return cursor.fetchone()
+        result: tuple[Any, ...] | None = cursor.fetchone()
+        return result
 
 
 def dolt_fetch(
@@ -172,10 +170,14 @@ class CommitManager(models.Manager["Commit"]):
         graph ordering (parent-child) from the ``dolt_log`` table.
         """
         qs = self.using(using) if using else self.all()
-        return list(
-            qs.order_by().values(
-                "commit_hash", "committer", "email", "date", "message"
-            )[:limit]
+        return cast(
+            list[dict[str, Any]],
+            list(
+                qs.order_by().values(
+                    "commit_hash", "committer", "email",
+                    "date", "message",
+                )[:limit]
+            ),
         )
 
 
@@ -196,23 +198,14 @@ class StatusManager(models.Manager["Status"]):
         """
         with connections[using if using is not None else "default"].cursor() as cursor:
             if exclude_ignored:
-                try:
-                    cursor.execute("""
-                        SELECT s.* FROM dolt_status s
-                        WHERE NOT EXISTS (
-                            SELECT 1 FROM dolt_ignore i
-                            WHERE i.ignored = 1
-                            AND s.table_name LIKE i.pattern
-                        )
-                    """)
-                except Exception:
-                    logger.debug(
-                        "dolt_ignore query failed, falling back to unfiltered dolt_status",
-                        exc_info=True,
+                cursor.execute("""
+                    SELECT s.* FROM dolt_status s
+                    WHERE NOT EXISTS (
+                        SELECT 1 FROM dolt_ignore i
+                        WHERE i.ignored = 1
+                        AND s.table_name LIKE i.pattern
                     )
-                    cursor.execute(
-                        "SELECT * FROM dolt_status"
-                    )
+                """)
             else:
                 cursor.execute("SELECT * FROM dolt_status")
             columns = [
@@ -243,7 +236,7 @@ class RemoteManager(models.Manager["Remote"]):
     ) -> list[dict[str, Any]]:
         """Return all remotes as dicts."""
         qs = self.using(using) if using else self.all()
-        return list(qs.values())
+        return cast(list[dict[str, Any]], list(qs.values()))
 
 
 # ---------------------------------------------------------------------------

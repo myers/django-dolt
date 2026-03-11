@@ -234,7 +234,7 @@ class TestDoltMultiDBAdminMixin:
             ),
             patch(
                 "django_dolt.admin.reverse",
-                side_effect=Exception("no url"),
+                return_value="/admin/dolt/status/test/",
             ),
         ):
             request = MagicMock()
@@ -252,6 +252,7 @@ class TestDoltMultiDBAdminMixin:
         assert "Branches" in model_names
         assert "Commits" in model_names
         assert "Remotes" in model_names
+        assert "Status" in model_names
 
 
 class TestRegisterBranchExtension:

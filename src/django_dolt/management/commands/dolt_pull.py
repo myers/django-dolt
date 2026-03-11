@@ -79,13 +79,10 @@ class Command(BaseCommand):
         # Show diff summary if there were actual changes
         if result != "Already up to date":
             self.stdout.write("\nChecking for changes...")
-            try:
-                commits = services.dolt_log(limit=1, using=using)
-                if commits:
-                    latest = commits[0]
-                    self.stdout.write(
-                        f"Latest commit: {latest['commit_hash'][:8]} - "
-                        f"{latest['message'].split(chr(10))[0]}"
-                    )
-            except Exception:
-                pass  # Non-critical, just informational
+            commits = services.dolt_log(limit=1, using=using)
+            if commits:
+                latest = commits[0]
+                self.stdout.write(
+                    f"Latest commit: {latest['commit_hash'][:8]} - "
+                    f"{latest['message'].split(chr(10))[0]}"
+                )

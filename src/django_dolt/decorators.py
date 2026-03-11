@@ -1,7 +1,6 @@
 """View decorators for automatic Dolt commits."""
 
 import functools
-import logging
 from collections.abc import Callable
 from typing import Any
 
@@ -9,8 +8,6 @@ from django.http import HttpRequest, HttpResponse
 
 from django_dolt import services
 from django_dolt.dolt_databases import get_dolt_databases
-
-logger = logging.getLogger("django_dolt")
 
 
 def get_author_from_request(request: HttpRequest) -> str:
@@ -38,7 +35,6 @@ def dolt_autocommit(
     message: str | Callable[[HttpRequest], str] = "Auto-commit",
     author: str | Callable[[HttpRequest], str] | None = None,
     commit_on: Callable[[HttpResponse], bool] | None = None,
-    suppress_errors: bool = True,
 ) -> Any:
     """Decorator that auto-commits Dolt changes after a view returns.
 
@@ -63,8 +59,6 @@ def dolt_autocommit(
             to deriving the author from ``request.user``.
         commit_on: Predicate ``(response) -> bool`` controlling when to
             commit. Defaults to committing on 2xx and 3xx responses.
-        suppress_errors: If ``True`` (default), log commit errors instead
-            of letting them propagate to the caller.
     """
     if commit_on is None:
         commit_on = _default_should_commit
@@ -100,20 +94,11 @@ def dolt_autocommit(
                 resolved_message = message
 
             for db_alias in db_list:
-                try:
-                    services.dolt_add_and_commit(
-                        message=resolved_message,
-                        author=resolved_author,
-                        using=db_alias,
-                    )
-                except Exception:
-                    if suppress_errors:
-                        logger.exception(
-                            "dolt_autocommit: failed to commit to %s",
-                            db_alias,
-                        )
-                    else:
-                        raise
+                services.dolt_add_and_commit(
+                    message=resolved_message,
+                    author=resolved_author,
+                    using=db_alias,
+                )
 
             return response
 

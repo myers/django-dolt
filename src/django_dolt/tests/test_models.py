@@ -117,12 +117,16 @@ class TestBaseCommitAdmin:
         result = admin_instance.hash_short(commit)
         assert result == "abc123de"
 
-    def test_message_preview_short_message(self, admin_instance: BaseCommitAdmin) -> None:
+    def test_message_preview_short_message(
+        self, admin_instance: BaseCommitAdmin
+    ) -> None:
         commit = Commit(message="Short message")
         result = admin_instance.message_preview(commit)
         assert result == "Short message"
 
-    def test_message_preview_long_message(self, admin_instance: BaseCommitAdmin) -> None:
+    def test_message_preview_long_message(
+        self, admin_instance: BaseCommitAdmin
+    ) -> None:
         commit = Commit(message="A" * 100)
         result = admin_instance.message_preview(commit)
         assert result == "A" * 60 + "..."

@@ -16,7 +16,12 @@
       "Bash(curl:*)",
       "Bash(pkill:*)",
       "Bash(DOLT_PORT=8906 uv run python:*)",
-      "Bash(DOLT_PORT=8906 DJANGO_SETTINGS_MODULE=demo.settings uv run python:*)"
+      "Bash(DOLT_PORT=8906 DJANGO_SETTINGS_MODULE=demo.settings uv run python:*)",
+      "Bash(python:*)",
+      "Bash(pytest:*)",
+      "WebFetch(domain:docs.dolthub.com)",
+      "Bash(bin/test:*)",
+      "Bash(git status:*)"
     ]
   },
   "enableAllProjectMcpServers": true,

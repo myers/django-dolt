@@ -56,12 +56,15 @@ class TestDoltCommitMixin(TestCase):
         mixin = DoltCommitMixin()
         mixin._do_dolt_commit(request, MagicMock())  # should not raise
 
-    @patch("django_dolt.admin.services.dolt_add_and_commit", side_effect=Exception("db error"))
+    @patch(
+        "django_dolt.admin.services.dolt_add_and_commit",
+        side_effect=Exception("db error"),
+    )
     @patch("django_dolt.admin._get_dolt_db_for_model", return_value="mydb")
     def test_do_dolt_commit_handles_exception(
         self, mock_get_db: MagicMock, mock_commit: MagicMock
     ) -> None:
-        """When dolt_add_and_commit raises, the error is caught and a message is added."""
+        """When dolt_add_and_commit raises, error is caught."""
         request = self.factory.post("/")
         request.user = self.superuser
         from django.contrib.messages.storage.fallback import FallbackStorage

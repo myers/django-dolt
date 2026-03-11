@@ -315,40 +315,19 @@ class TestDoltStatusErrorHandling:
         with pytest.raises(services.DoltError, match="connection lost"):
             services.dolt_status(exclude_ignored=False)
 
-    @patch("django_dolt.models.connections")
-    def test_status_exclude_ignored_falls_back(
-        self, mock_conns: MagicMock
+    @patch("django_dolt.models.Status.objects.current")
+    def test_status_exclude_ignored_error_propagates(
+        self, mock_current: MagicMock
     ) -> None:
-        """When dolt_ignore table doesn't exist, fall back."""
-        mock_cursor = MagicMock()
-        call_count = 0
-
-        def execute_side_effect(sql: str, *args: Any) -> None:
-            nonlocal call_count
-            call_count += 1
-            if call_count == 1 and "dolt_ignore" in sql:
-                raise Exception("table dolt_ignore doesn't exist")
-            mock_cursor.description = [
-                ("table_name",),
-                ("staged",),
-                ("status",),
-            ]
-            mock_cursor.fetchall.return_value = [
-                ("t1", 0, "new table")
-            ]
-
-        mock_cursor.execute.side_effect = execute_side_effect
-        mock_conns.__getitem__ = MagicMock(return_value=MagicMock())
-        mock_conns.__getitem__.return_value.cursor.return_value.__enter__ = (
-            lambda s: mock_cursor
-        )
-        mock_conns.__getitem__.return_value.cursor.return_value.__exit__ = MagicMock(
-            return_value=False
+        """When dolt_ignore query fails, error propagates."""
+        mock_current.side_effect = Exception(
+            "table dolt_ignore doesn't exist"
         )
 
-        result = services.dolt_status(exclude_ignored=True)
-        assert len(result) == 1
-        assert result[0]["table_name"] == "t1"
+        with pytest.raises(
+            services.DoltError, match="dolt_ignore"
+        ):
+            services.dolt_status(exclude_ignored=True)
 
 
 class TestDoltPullMocked:

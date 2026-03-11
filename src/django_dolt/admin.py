@@ -5,7 +5,6 @@ Provides an extended admin site with Dolt commit history and pull functionality,
 plus read-only ModelAdmin classes for Dolt system tables.
 """
 
-import logging
 from typing import Any, cast
 
 from django.contrib import admin, messages
@@ -18,9 +17,7 @@ from django.urls import URLPattern, path, reverse
 from django_dolt import services
 from django_dolt.decorators import get_author_from_request
 from django_dolt.dolt_databases import get_dolt_databases
-from django_dolt.models import Branch, Commit, Remote
-
-logger = logging.getLogger("django_dolt")
+from django_dolt.models import Branch, Commit
 
 
 def _get_dolt_db_for_model(model: type) -> str | None:
@@ -195,21 +192,16 @@ class DoltMultiDBAdminMixin:
             # Inject a Status link if this is a known Dolt database
             if db_suffix in dolt_databases:
                 if not any(m.get("name") == "Status" for m in models):
-                    try:
-                        status_url = reverse("admin:dolt_status_" + db_suffix)
-                        models.insert(
-                            0,
-                            {
-                                "name": "Status",
-                                "object_name": f"Status_{db_suffix}",
-                                "admin_url": status_url,
-                                "view_only": True,
-                            },
-                        )
-                    except Exception:
-                        logger.debug(
-                            "Could not resolve status URL for %s", db_suffix
-                        )
+                    status_url = reverse("admin:dolt_status_" + db_suffix)
+                    models.insert(
+                        0,
+                        {
+                            "name": "Status",
+                            "object_name": f"Status_{db_suffix}",
+                            "admin_url": status_url,
+                            "view_only": True,
+                        },
+                    )
             dolt_apps.append(
                 {
                     "name": f"{db_display} (Dolt)",
@@ -384,29 +376,15 @@ def _make_status_view(db_alias: str, site: admin.AdminSite | None = None) -> Any
             return HttpResponseRedirect(reverse("admin:dolt_status_" + db_alias))
 
         # GET: show status
-        try:
-            status = services.dolt_status(exclude_ignored=True, using=db_alias)
-            for item in status:
-                item["diff_url"] = reverse(
-                    "admin:dolt_diff_" + db_alias,
-                    kwargs={"table_name": item["table_name"]},
-                )
-        except Exception:
-            logger.exception("Failed to get status for %s", db_alias)
-            messages.error(request, f"Could not load status for {db_alias}")
-            status = []
+        status = services.dolt_status(exclude_ignored=True, using=db_alias)
+        for item in status:
+            item["diff_url"] = reverse(
+                "admin:dolt_diff_" + db_alias,
+                kwargs={"table_name": item["table_name"]},
+            )
 
-        try:
-            commits = services.dolt_log(limit=10, using=db_alias)
-        except Exception:
-            logger.exception("Failed to get log for %s", db_alias)
-            commits = []
-
-        try:
-            current_branch = services.dolt_current_branch(using=db_alias)
-        except Exception:
-            logger.exception("Failed to get current branch for %s", db_alias)
-            current_branch = "unknown"
+        commits = services.dolt_log(limit=10, using=db_alias)
+        current_branch = services.dolt_current_branch(using=db_alias)
 
         db_display = db_alias.replace("_", " ").title()
         context = {
@@ -434,13 +412,9 @@ def _make_diff_view(db_alias: str, site: admin.AdminSite | None = None) -> Any:
                 reverse("admin:dolt_status_" + db_alias)
             )
 
-        try:
-            diff_rows = services.dolt_diff(
-                "HEAD", "WORKING", table_name, using=db_alias
-            )
-        except Exception:
-            logger.exception("Failed to get diff for %s.%s", db_alias, table_name)
-            diff_rows = []
+        diff_rows = services.dolt_diff(
+            "HEAD", "WORKING", table_name, using=db_alias
+        )
 
         # Process diff rows: extract column names and highlight changes
         columns: list[str] = []

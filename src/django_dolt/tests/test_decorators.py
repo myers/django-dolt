@@ -201,27 +201,14 @@ class TestDoltAutocommit:
         assert mock_commit.call_args.kwargs["author"] == "Bot <bot@example.com>"
 
     @patch("django_dolt.decorators.services.dolt_add_and_commit")
-    def test_suppress_errors_true(
+    def test_commit_error_propagates(
         self,
         mock_commit: MagicMock,
         auth_request: HttpRequest,
     ) -> None:
         mock_commit.side_effect = Exception("db error")
 
-        wrapped = dolt_autocommit(_ok_view, using="inventory", suppress_errors=True)
-        response = wrapped(auth_request)
-
-        assert response.status_code == 200  # view response is preserved
-
-    @patch("django_dolt.decorators.services.dolt_add_and_commit")
-    def test_suppress_errors_false(
-        self,
-        mock_commit: MagicMock,
-        auth_request: HttpRequest,
-    ) -> None:
-        mock_commit.side_effect = Exception("db error")
-
-        wrapped = dolt_autocommit(_ok_view, using="inventory", suppress_errors=False)
+        wrapped = dolt_autocommit(_ok_view, using="inventory")
 
         with pytest.raises(Exception, match="db error"):
             wrapped(auth_request)
