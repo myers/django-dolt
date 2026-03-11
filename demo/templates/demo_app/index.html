@@ -1,47 +1,43 @@
 {% extends "base.html" %}
 
-{% block title %}Home - Django-Dolt Demo{% endblock %}
+{% block title %}Home — Django-Dolt Demo{% endblock %}
+{% block nav_home %}class="active"{% endblock %}
 
 {% block content %}
-<div class="card">
-    <h2>Multi-Database Dolt Demo</h2>
-    <p>This demo showcases Django-Dolt's multi-database support with two separate Dolt databases:</p>
-    <ul style="margin: 1rem 0 1rem 2rem;">
-        <li><strong>Inventory Database</strong> - Tracks products and categories</li>
-        <li><strong>Orders Database</strong> - Tracks customers and orders</li>
-    </ul>
-    <p>Each database has its own version history, and you can commit changes independently.</p>
+<div class="page-header fade-up">
+    <h1>Dashboard</h1>
+    <p class="subtitle">Two Dolt databases, each independently version-controlled.</p>
 </div>
 
-<div class="grid">
+<div class="grid grid-2 fade-up delay-1">
     <div class="card">
-        <h2>📦 Inventory Database</h2>
-        <div class="grid" style="grid-template-columns: 1fr 1fr;">
-            <div class="stat-box">
-                <div class="number">{{ inventory_stats.categories }}</div>
-                <div class="label">Categories</div>
+        <div class="card-label">Inventory Database</div>
+        <div class="stat-grid mb-2">
+            <div class="stat">
+                <div class="stat-value">{{ inventory_stats.categories }}</div>
+                <div class="stat-label">Categories</div>
             </div>
-            <div class="stat-box">
-                <div class="number">{{ inventory_stats.products }}</div>
-                <div class="label">Products</div>
+            <div class="stat">
+                <div class="stat-value">{{ inventory_stats.products }}</div>
+                <div class="stat-label">Products</div>
             </div>
         </div>
-        <a href="{% url 'inventory' %}" class="btn">View Inventory →</a>
+        <a href="{% url 'inventory' %}" class="btn">View Inventory &rarr;</a>
     </div>
 
     <div class="card">
-        <h2>🛒 Orders Database</h2>
-        <div class="grid" style="grid-template-columns: 1fr 1fr;">
-            <div class="stat-box">
-                <div class="number">{{ orders_stats.customers }}</div>
-                <div class="label">Customers</div>
+        <div class="card-label">Orders Database</div>
+        <div class="stat-grid mb-2">
+            <div class="stat">
+                <div class="stat-value">{{ orders_stats.customers }}</div>
+                <div class="stat-label">Customers</div>
             </div>
-            <div class="stat-box">
-                <div class="number">{{ orders_stats.orders }}</div>
-                <div class="label">Orders</div>
+            <div class="stat">
+                <div class="stat-value">{{ orders_stats.orders }}</div>
+                <div class="stat-label">Orders</div>
             </div>
         </div>
-        <a href="{% url 'orders' %}" class="btn">View Orders →</a>
+        <a href="{% url 'orders' %}" class="btn">View Orders &rarr;</a>
     </div>
 </div>
 {% endblock %}

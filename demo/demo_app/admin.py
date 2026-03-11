@@ -2,6 +2,7 @@
 
 from django.contrib import admin
 
+from demo.admin import dolt_admin_site
 from django_dolt.admin import DoltCommitMixin
 
 from .models import Category, Customer, Order, OrderItem, Product, ProductComment
@@ -12,7 +13,6 @@ from .models import Category, Customer, Order, OrderItem, Product, ProductCommen
 # =============================================================================
 
 
-@admin.register(Category)
 class CategoryAdmin(DoltCommitMixin, admin.ModelAdmin):  # type: ignore[type-arg]
     """Admin for product categories."""
 
@@ -20,7 +20,6 @@ class CategoryAdmin(DoltCommitMixin, admin.ModelAdmin):  # type: ignore[type-arg
     search_fields = ["name"]
 
 
-@admin.register(Product)
 class ProductAdmin(DoltCommitMixin, admin.ModelAdmin):  # type: ignore[type-arg]
     """Admin for products."""
 
@@ -29,7 +28,6 @@ class ProductAdmin(DoltCommitMixin, admin.ModelAdmin):  # type: ignore[type-arg]
     search_fields = ["sku", "name"]
 
 
-@admin.register(ProductComment)
 class ProductCommentAdmin(DoltCommitMixin, admin.ModelAdmin):  # type: ignore[type-arg]
     """Admin for product comments."""
 
@@ -50,7 +48,6 @@ class OrderItemInline(admin.TabularInline):  # type: ignore[type-arg]
     extra = 0
 
 
-@admin.register(Customer)
 class CustomerAdmin(DoltCommitMixin, admin.ModelAdmin):  # type: ignore[type-arg]
     """Admin for customers."""
 
@@ -58,7 +55,6 @@ class CustomerAdmin(DoltCommitMixin, admin.ModelAdmin):  # type: ignore[type-arg
     search_fields = ["email", "first_name", "last_name"]
 
 
-@admin.register(Order)
 class OrderAdmin(DoltCommitMixin, admin.ModelAdmin):  # type: ignore[type-arg]
     """Admin for orders."""
 
@@ -66,3 +62,11 @@ class OrderAdmin(DoltCommitMixin, admin.ModelAdmin):  # type: ignore[type-arg]
     list_filter = ["status", "created_at"]
     search_fields = ["order_number", "customer__email"]
     inlines = [OrderItemInline]
+
+
+# Register all models on the custom DoltAdminSite
+dolt_admin_site.register(Category, CategoryAdmin)
+dolt_admin_site.register(Product, ProductAdmin)
+dolt_admin_site.register(ProductComment, ProductCommentAdmin)
+dolt_admin_site.register(Customer, CustomerAdmin)
+dolt_admin_site.register(Order, OrderAdmin)

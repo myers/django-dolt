@@ -103,7 +103,11 @@ DATABASES = {
 DATABASE_ROUTERS = ["demo.routers.DemoRouter"]
 
 # Dolt databases to manage via django-dolt
+# Dolt databases to manage via django-dolt
 DOLT_DATABASES = ["inventory", "orders"]
+
+# Disable auto-registration on admin.site since we use DoltAdminSite
+DOLT_AUTO_REGISTER_ADMIN = False
 
 AUTH_PASSWORD_VALIDATORS = [
     {

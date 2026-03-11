@@ -1,49 +1,59 @@
 {% extends "base.html" %}
 
-{% block title %}{{ product.name }} - Django-Dolt Demo{% endblock %}
+{% block title %}{{ product.name }} — Django-Dolt Demo{% endblock %}
+{% block nav_inventory %}class="active"{% endblock %}
 
 {% block content %}
-<div class="card">
-    <h2>{{ product.name }}</h2>
-    <table>
-        <tr><th>SKU</th><td><code>{{ product.sku }}</code></td></tr>
-        <tr><th>Category</th><td>{{ product.category.name }}</td></tr>
-        <tr><th>Price</th><td>${{ product.price }}</td></tr>
-        <tr><th>In Stock</th><td>{{ product.quantity_in_stock }}</td></tr>
-        {% if product.description %}<tr><th>Description</th><td>{{ product.description }}</td></tr>{% endif %}
-    </table>
-    <p style="margin-top: 1rem;"><a href="{% url 'inventory' %}">&larr; Back to Inventory</a></p>
+<div class="page-header fade-up">
+    <p class="text-sm"><a href="{% url 'inventory' %}">&larr; Back to Inventory</a></p>
+    <h1>{{ product.name }}</h1>
 </div>
 
-<div class="card">
-    <h2>Comments</h2>
-    <p style="color: #666; font-size: 0.85rem; margin-bottom: 1rem;">
-        Comments are auto-committed to Dolt using <code>@dolt_autocommit</code>.
-    </p>
-
-    {% if user.is_authenticated %}
-    <form method="post" action="{% url 'add_product_comment' product.pk %}" style="margin-bottom: 1.5rem;">
-        {% csrf_token %}
-        <div style="display: flex; gap: 0.5rem;">
-            <input type="text" name="body" placeholder="Add a comment..." required
-                   style="flex: 1; padding: 0.5rem; border: 1px solid #ddd; border-radius: 4px;">
-            <button type="submit" class="btn btn-success">Comment</button>
-        </div>
-    </form>
-    {% else %}
-    <p style="margin-bottom: 1.5rem;"><a href="/admin/login/?next={{ request.path }}" class="btn">Log in to comment</a></p>
-    {% endif %}
-
-    {% if comments %}
-    {% for comment in comments %}
-    <div style="padding: 0.75rem 0; border-bottom: 1px solid #eee;">
-        <strong>{{ comment.author }}</strong>
-        <span style="color: #999; font-size: 0.85rem; margin-left: 0.5rem;">{{ comment.created_at }}</span>
-        <p style="margin-top: 0.25rem;">{{ comment.body }}</p>
+<div class="grid grid-2 fade-up delay-1">
+    <!-- Product details -->
+    <div class="card">
+        <h2>Details</h2>
+        <table>
+            <tr><td class="muted" style="width:100px;">SKU</td><td><code>{{ product.sku }}</code></td></tr>
+            <tr><td class="muted">Category</td><td>{{ product.category.name }}</td></tr>
+            <tr><td class="muted">Price</td><td class="mono">${{ product.price }}</td></tr>
+            <tr><td class="muted">In Stock</td><td>{{ product.quantity_in_stock }} units</td></tr>
+            {% if product.description %}
+            <tr><td class="muted" style="vertical-align:top;">Description</td><td>{{ product.description }}</td></tr>
+            {% endif %}
+        </table>
     </div>
-    {% endfor %}
-    {% else %}
-    <p style="color: #999;">No comments yet.</p>
-    {% endif %}
+
+    <!-- Comments -->
+    <div class="card">
+        <h2>Comments</h2>
+        <p class="muted text-xs mb-2">Auto-committed via <code>@dolt_autocommit</code></p>
+
+        {% if user.is_authenticated %}
+        <form method="post" action="{% url 'add_product_comment' product.pk %}" class="mb-2">
+            {% csrf_token %}
+            <div style="display:flex;gap:0.4rem;">
+                <input type="text" name="body" class="input" placeholder="Add a comment..." required style="flex:1;">
+                <button type="submit" class="btn btn-accent btn-sm">Post</button>
+            </div>
+        </form>
+        {% else %}
+        <p class="mb-2"><a href="/admin/login/?next={{ request.path }}" class="btn btn-sm">Log in to comment</a></p>
+        {% endif %}
+
+        {% if comments %}
+        {% for comment in comments %}
+        <div class="comment">
+            <div class="comment-meta">
+                <span class="comment-author">{{ comment.author }}</span>
+                <span class="comment-time">{{ comment.created_at|date:"M d, H:i" }}</span>
+            </div>
+            <p class="comment-body">{{ comment.body }}</p>
+        </div>
+        {% endfor %}
+        {% else %}
+        <p class="muted text-sm" style="padding:1rem 0;">No comments yet.</p>
+        {% endif %}
+    </div>
 </div>
 {% endblock %}

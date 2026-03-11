@@ -1,38 +1,93 @@
 {% extends "base.html" %}
 
-{% block title %}Inventory - Django-Dolt Demo{% endblock %}
+{% block title %}Inventory — Django-Dolt Demo{% endblock %}
+{% block nav_inventory %}class="active"{% endblock %}
 
 {% block content %}
-<div class="grid">
-    <div class="card" style="grid-column: span 2;">
-        <h2>📦 Products</h2>
-        {% if products %}
-        <table>
-            <thead>
-                <tr>
-                    <th>SKU</th>
-                    <th>Name</th>
-                    <th>Category</th>
-                    <th>Price</th>
-                    <th>In Stock</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for product in products %}
-                <tr>
-                    <td><code>{{ product.sku }}</code></td>
-                    <td><a href="{% url 'product_detail' product.pk %}">{{ product.name }}</a></td>
-                    <td>{{ product.category.name }}</td>
-                    <td>${{ product.price }}</td>
-                    <td>{{ product.quantity_in_stock }}</td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
-        {% else %}
-        <p>No products yet. Add some via the <a href="/admin/inventory/product/">admin panel</a>.</p>
-        {% endif %}
+<div class="page-header fade-up">
+    <h1>Inventory</h1>
+    <p class="subtitle">Products tracked in the <code>inventory</code> Dolt database.</p>
+</div>
+
+<div class="grid grid-2-1">
+    <!-- Products -->
+    <div class="fade-up delay-1">
+        <div class="card">
+            <h2>Products</h2>
+            {% if products %}
+            <div class="table-wrap">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>SKU</th>
+                            <th>Name</th>
+                            <th>Category</th>
+                            <th class="text-right">Price</th>
+                            <th class="text-right">Stock</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for product in products %}
+                        <tr>
+                            <td><code>{{ product.sku }}</code></td>
+                            <td><a href="{% url 'product_detail' product.pk %}">{{ product.name }}</a></td>
+                            <td class="muted">{{ product.category.name }}</td>
+                            <td class="text-right mono">${{ product.price }}</td>
+                            <td class="text-right">{{ product.quantity_in_stock }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <div class="empty">No products yet. Run <code>setup_demo</code> or add via <a href="/admin/">admin</a>.</div>
+            {% endif %}
+        </div>
     </div>
 
+    <!-- Sidebar: Dolt status + commits -->
+    <div class="fade-up delay-2">
+        <div class="card">
+            <div class="card-label">Working Set</div>
+            {% if dolt_status %}
+            <div class="mb-1">
+                {% for item in dolt_status %}
+                <div class="status-row">
+                    <span class="status-dot {% if item.status == 'new table' %}new{% elif item.status == 'modified' %}modified{% else %}deleted{% endif %}"></span>
+                    <span class="status-table">{{ item.table_name }}</span>
+                    <span class="status-type">{{ item.status }}</span>
+                </div>
+                {% endfor %}
+            </div>
+            {% if user.is_authenticated %}
+            <form method="post" action="{% url 'dolt_commit' 'inventory' %}">
+                {% csrf_token %}
+                <input type="hidden" name="next" value="{% url 'inventory' %}">
+                <div style="display:flex;gap:0.4rem;">
+                    <input type="text" name="message" class="input" placeholder="Commit message..." required style="flex:1;">
+                    <button type="submit" class="btn btn-accent btn-sm">Commit</button>
+                </div>
+            </form>
+            {% endif %}
+            {% else %}
+            <p class="muted text-sm" style="padding:0.5rem 0;">Nothing to commit.</p>
+            {% endif %}
+        </div>
+
+        <div class="card">
+            <div class="card-label">Recent Commits</div>
+            {% if dolt_commits %}
+            {% for commit in dolt_commits %}
+            <div class="commit-row">
+                <span class="commit-hash">{{ commit.commit_hash|truncatechars:11 }}</span>
+                <span class="commit-msg">{{ commit.message|truncatechars:40 }}</span>
+                <span class="commit-date">{{ commit.date|date:"M d" }}</span>
+            </div>
+            {% endfor %}
+            {% else %}
+            <p class="muted text-sm" style="padding:0.5rem 0;">No commits yet.</p>
+            {% endif %}
+        </div>
+    </div>
 </div>
 {% endblock %}

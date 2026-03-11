@@ -9,8 +9,3 @@ class DemoAppConfig(AppConfig):
     default_auto_field = "django.db.models.BigAutoField"
     name = "demo_app"
     verbose_name = "Demo Application"
-
-    def ready(self):
-        from django_dolt.admin import register_dolt_status_view
-
-        register_dolt_status_view()
