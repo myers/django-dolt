@@ -13,9 +13,9 @@ class DemoRouter:
         """Determine database based on db_table prefix."""
         db_table = model._meta.db_table
         if db_table.startswith("inventory_"):
-            return "inventory_db"
+            return "inventory"
         if db_table.startswith("orders_"):
-            return "orders_db"
+            return "orders"
         return None
 
     def db_for_read(self, model: type, **hints: Any) -> str | None:

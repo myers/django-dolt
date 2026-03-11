@@ -1,8 +1,8 @@
 """Django settings for django-dolt demo application.
 
 This demo demonstrates multi-database support with two Dolt databases:
-- inventory_db: Product inventory tracking
-- orders_db: Customer orders tracking
+- inventory: Product inventory tracking
+- orders: Customer orders tracking
 
 Each database has its own version history, branches, and commits visible
 in Django admin.
@@ -81,7 +81,7 @@ DATABASES = {
         "ENGINE": "django.db.backends.sqlite3",
         "NAME": BASE_DIR / "db.sqlite3",
     },
-    "inventory_db": {
+    "inventory": {
         "ENGINE": "django.db.backends.mysql",
         "HOST": DOLT_HOST,
         "PORT": DOLT_PORT,
@@ -89,7 +89,7 @@ DATABASES = {
         "PASSWORD": DOLT_PASSWORD,
         "NAME": "inventory",
     },
-    "orders_db": {
+    "orders": {
         "ENGINE": "django.db.backends.mysql",
         "HOST": DOLT_HOST,
         "PORT": DOLT_PORT,

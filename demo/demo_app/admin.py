@@ -8,7 +8,7 @@ from .models import Category, Customer, Order, OrderItem, Product
 
 
 # =============================================================================
-# Inventory Admin (inventory_db)
+# Inventory Admin (inventory)
 # =============================================================================
 
 
@@ -30,7 +30,7 @@ class ProductAdmin(DoltCommitMixin, admin.ModelAdmin):  # type: ignore[type-arg]
 
 
 # =============================================================================
-# Orders Admin (orders_db)
+# Orders Admin (orders)
 # =============================================================================
 
 

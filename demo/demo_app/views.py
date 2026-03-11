@@ -18,13 +18,13 @@ def index(request: HttpRequest) -> HttpResponse:
 
     # Get counts from each database
     inventory_stats = {
-        "categories": Category.objects.using("inventory_db").count(),
-        "products": Product.objects.using("inventory_db").count(),
+        "categories": Category.objects.using("inventory").count(),
+        "products": Product.objects.using("inventory").count(),
     }
 
     orders_stats = {
-        "customers": Customer.objects.using("orders_db").count(),
-        "orders": Order.objects.using("orders_db").count(),
+        "customers": Customer.objects.using("orders").count(),
+        "orders": Order.objects.using("orders").count(),
     }
 
     context = {
@@ -37,13 +37,13 @@ def index(request: HttpRequest) -> HttpResponse:
 
 def inventory_dashboard(request: HttpRequest) -> HttpResponse:
     """Dashboard for inventory database."""
-    products = Product.objects.using("inventory_db").select_related("category").all()
-    categories = Category.objects.using("inventory_db").all()
+    products = Product.objects.using("inventory").select_related("category").all()
+    categories = Category.objects.using("inventory").all()
 
     # Get Dolt status and recent commits
     try:
-        status = dolt_status(using="inventory_db")
-        commits = dolt_log(limit=10, using="inventory_db")
+        status = dolt_status(using="inventory")
+        commits = dolt_log(limit=10, using="inventory")
     except Exception:
         status = []
         commits = []
@@ -53,7 +53,7 @@ def inventory_dashboard(request: HttpRequest) -> HttpResponse:
         "categories": categories,
         "dolt_status": status,
         "dolt_commits": commits,
-        "db_alias": "inventory_db",
+        "db_alias": "inventory",
     }
     return render(request, "demo_app/inventory.html", context)
 
@@ -61,17 +61,17 @@ def inventory_dashboard(request: HttpRequest) -> HttpResponse:
 def orders_dashboard(request: HttpRequest) -> HttpResponse:
     """Dashboard for orders database."""
     orders = (
-        Order.objects.using("orders_db")
+        Order.objects.using("orders")
         .select_related("customer")
         .prefetch_related("items")
         .all()
     )
-    customers = Customer.objects.using("orders_db").all()
+    customers = Customer.objects.using("orders").all()
 
     # Get Dolt status and recent commits
     try:
-        status = dolt_status(using="orders_db")
-        commits = dolt_log(limit=10, using="orders_db")
+        status = dolt_status(using="orders")
+        commits = dolt_log(limit=10, using="orders")
     except Exception:
         status = []
         commits = []
@@ -81,7 +81,7 @@ def orders_dashboard(request: HttpRequest) -> HttpResponse:
         "customers": customers,
         "dolt_status": status,
         "dolt_commits": commits,
-        "db_alias": "orders_db",
+        "db_alias": "orders",
     }
     return render(request, "demo_app/orders.html", context)
 
@@ -115,8 +115,8 @@ def dolt_commit(request: HttpRequest, db_alias: str) -> HttpResponse:
     next_url = request.POST.get("next")
     if next_url:
         return HttpResponseRedirect(next_url)
-    if db_alias == "inventory_db":
+    if db_alias == "inventory":
         return HttpResponseRedirect(reverse("inventory"))
-    elif db_alias == "orders_db":
+    elif db_alias == "orders":
         return HttpResponseRedirect(reverse("orders"))
     return HttpResponseRedirect(reverse("index"))

@@ -78,7 +78,7 @@ class Command(BaseCommand):
         # for these simple models
 
         # Inventory tables
-        with connections["inventory_db"].cursor() as cursor:
+        with connections["inventory"].cursor() as cursor:
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS inventory_category (
                     id BIGINT AUTO_INCREMENT PRIMARY KEY,
@@ -104,7 +104,7 @@ class Command(BaseCommand):
         self.stdout.write("  Created inventory tables")
 
         # Orders tables
-        with connections["orders_db"].cursor() as cursor:
+        with connections["orders"].cursor() as cursor:
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS orders_customer (
                     id BIGINT AUTO_INCREMENT PRIMARY KEY,
@@ -146,20 +146,20 @@ class Command(BaseCommand):
         self.stdout.write("Creating inventory data...")
 
         # Check if data already exists
-        if Category.objects.using("inventory_db").exists():
+        if Category.objects.using("inventory").exists():
             self.stdout.write("  Inventory data already exists, skipping...")
             return
 
         # Create categories
-        electronics = Category.objects.using("inventory_db").create(
+        electronics = Category.objects.using("inventory").create(
             name="Electronics",
             description="Electronic devices and accessories",
         )
-        clothing = Category.objects.using("inventory_db").create(
+        clothing = Category.objects.using("inventory").create(
             name="Clothing",
             description="Apparel and fashion items",
         )
-        books = Category.objects.using("inventory_db").create(
+        books = Category.objects.using("inventory").create(
             name="Books",
             description="Books and publications",
         )
@@ -178,7 +178,7 @@ class Command(BaseCommand):
         ]
 
         for sku, name, category, price, qty in products_data:
-            Product.objects.using("inventory_db").create(
+            Product.objects.using("inventory").create(
                 sku=sku,
                 name=name,
                 category=category,
@@ -193,7 +193,7 @@ class Command(BaseCommand):
             dolt_add_and_commit(
                 message="Initial inventory data",
                 author="Demo Setup <demo@example.com>",
-                using="inventory_db",
+                using="inventory",
             )
             self.stdout.write("  Committed inventory data to Dolt")
         except Exception as e:
@@ -204,7 +204,7 @@ class Command(BaseCommand):
         self.stdout.write("Creating orders data...")
 
         # Check if data already exists
-        if Customer.objects.using("orders_db").exists():
+        if Customer.objects.using("orders").exists():
             self.stdout.write("  Orders data already exists, skipping...")
             return
 
@@ -217,7 +217,7 @@ class Command(BaseCommand):
 
         customers = []
         for email, first, last, phone in customers_data:
-            customer = Customer.objects.using("orders_db").create(
+            customer = Customer.objects.using("orders").create(
                 email=email,
                 first_name=first,
                 last_name=last,
@@ -246,14 +246,14 @@ class Command(BaseCommand):
 
         for customer, order_num, status, items in orders_data:
             total = sum(qty * price for _, _, qty, price in items)
-            order = Order.objects.using("orders_db").create(
+            order = Order.objects.using("orders").create(
                 customer=customer,
                 order_number=order_num,
                 status=status,
                 total_amount=total,
             )
             for sku, name, qty, price in items:
-                OrderItem.objects.using("orders_db").create(
+                OrderItem.objects.using("orders").create(
                     order=order,
                     product_sku=sku,
                     product_name=name,
@@ -268,7 +268,7 @@ class Command(BaseCommand):
             dolt_add_and_commit(
                 message="Initial orders data",
                 author="Demo Setup <demo@example.com>",
-                using="orders_db",
+                using="orders",
             )
             self.stdout.write("  Committed orders data to Dolt")
         except Exception as e:

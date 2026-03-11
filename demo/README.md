@@ -2,8 +2,8 @@
 
 This demo application showcases Django-Dolt's multi-database support with two separate Dolt databases:
 
-- **Inventory Database** (`inventory_db`) - Tracks products and categories
-- **Orders Database** (`orders_db`) - Tracks customers and orders
+- **Inventory Database** (`inventory`) - Tracks products and categories
+- **Orders Database** (`orders`) - Tracks customers and orders
 
 Each database has its own version history, and you can commit changes independently.
 
@@ -60,8 +60,8 @@ The demo uses two Dolt databases configured in `demo/settings.py`:
 ```python
 DATABASES = {
     "default": {...},  # SQLite for Django internals
-    "inventory_db": {...},  # Dolt database for inventory
-    "orders_db": {...},  # Dolt database for orders
+    "inventory": {...},  # Dolt database for inventory
+    "orders": {...},  # Dolt database for orders
 }
 ```
 
@@ -69,8 +69,8 @@ DATABASES = {
 
 Models are routed to their respective databases using `demo/routers.py`:
 
-- `Category` and `Product` models → `inventory_db`
-- `Customer`, `Order`, and `OrderItem` models → `orders_db`
+- `Category` and `Product` models → `inventory`
+- `Customer`, `Order`, and `OrderItem` models → `orders`
 
 ### Dolt Version Control
 

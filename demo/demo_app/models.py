@@ -1,15 +1,15 @@
 """Demo models for showcasing multi-database Dolt support.
 
 This module defines models for two separate Dolt databases:
-- Inventory models (inventory_db): Products and categories
-- Order models (orders_db): Customers and orders
+- Inventory models (inventory): Products and categories
+- Order models (orders): Customers and orders
 """
 
 from django.db import models
 
 
 # =============================================================================
-# Inventory Models (stored in inventory_db Dolt database)
+# Inventory Models (stored in inventory Dolt database)
 # =============================================================================
 
 
@@ -52,7 +52,7 @@ class Product(models.Model):
 
 
 # =============================================================================
-# Order Models (stored in orders_db Dolt database)
+# Order Models (stored in orders Dolt database)
 # =============================================================================
 
 
