@@ -15,11 +15,12 @@ jobs:
         image: dolthub/dolt-sql-server:latest
         env:
           DOLT_ROOT_PASSWORD: dolt
+          DOLT_ROOT_HOST: "%"
         ports:
           - 3306:3306
         options: >-
-          --health-cmd "mysqladmin ping -u root -pdolt"
-          --health-interval 10s
+          --health-cmd "mysqladmin ping -h localhost -u root -pdolt"
+          --health-interval 5s
           --health-timeout 5s
           --health-retries 10
 
