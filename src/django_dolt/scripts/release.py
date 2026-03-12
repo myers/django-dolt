@@ -2,10 +2,13 @@
 Release script for django-dolt
 Bumps version, commits, tags, and pushes to git remote
 
-Usage: bin/release [patch|minor|major]
+Usage:
+    bin/release [patch|minor|major]   # Bump version, commit, tag, and push
+    bin/release --publish             # Tag and push the current version as-is
 Default: patch
 """
 
+import argparse
 import re
 import subprocess
 import sys
@@ -114,14 +117,42 @@ def confirm(prompt: str) -> bool:
     return response in ("y", "yes")
 
 
+def tag_and_push(version: str, branch: str) -> None:
+    """Tag the current commit and push to origin."""
+    tag = f"v{version}"
+
+    # Check if tag already exists
+    result = run_command(["git", "tag", "-l", tag])
+    if result.stdout.strip():
+        print(f"{RED}Error: Tag {tag} already exists{NC}")
+        sys.exit(1)
+
+    print(f"{YELLOW}Creating tag: {tag}{NC}")
+    run_command(["git", "tag", "-a", tag, "-m", f"Release version {version}"])
+
+    print(f"{YELLOW}Pushing to origin...{NC}")
+    run_command(["git", "push", "origin", branch])
+    run_command(["git", "push", "origin", tag])
+
+    print(f"\n{GREEN}Successfully released version {version}{NC}")
+
+
 def main() -> None:
     """Main release process."""
-    bump_type = sys.argv[1] if len(sys.argv) > 1 else "patch"
-
-    if bump_type not in ("patch", "minor", "major"):
-        print(f"{RED}Error: Invalid bump type '{bump_type}'{NC}")
-        print("Usage: bin/release [patch|minor|major]")
-        sys.exit(1)
+    parser = argparse.ArgumentParser(description="Release django-dolt")
+    parser.add_argument(
+        "bump_type",
+        nargs="?",
+        default="patch",
+        choices=["patch", "minor", "major"],
+        help="Version bump type (default: patch)",
+    )
+    parser.add_argument(
+        "--publish",
+        action="store_true",
+        help="Tag and push the current version without bumping",
+    )
+    args = parser.parse_args()
 
     if not is_working_directory_clean():
         print(f"{RED}Error: Working directory is not clean{NC}")
@@ -143,10 +174,15 @@ def main() -> None:
         print(f"{RED}Error: Could not find version in __init__.py{NC}")
         sys.exit(1)
 
+    if args.publish:
+        print(f"Publishing current version: {GREEN}{current_version}{NC}")
+        tag_and_push(current_version, current_branch)
+        return
+
     print(f"Current version: {GREEN}{current_version}{NC}")
 
     try:
-        new_version = bump_version(current_version, bump_type)
+        new_version = bump_version(current_version, args.bump_type)
     except ValueError as e:
         print(f"{RED}Error: {e}{NC}")
         sys.exit(1)
@@ -163,32 +199,7 @@ def main() -> None:
     print(f"{YELLOW}Creating commit: {commit_msg}{NC}")
     run_command(["git", "commit", "-m", commit_msg])
 
-    tag = f"v{new_version}"
-    print(f"{YELLOW}Creating tag: {tag}{NC}")
-    run_command(["git", "tag", "-a", tag, "-m", f"Release version {new_version}"])
-
-    print(f"\n{YELLOW}Ready to push:{NC}")
-    print(f"  - Commit: {commit_msg}")
-    print(f"  - Tag: {tag}")
-    print("  - Remote: origin")
-    print(f"  - Branch: {current_branch}")
-
-    if not confirm("\nPush to remote?"):
-        print(f"{YELLOW}Push cancelled. Changes committed locally.{NC}")
-        print("To push manually, run:")
-        print(f"  git push origin {current_branch}")
-        print(f"  git push origin {tag}")
-        sys.exit(0)
-
-    print(f"{YELLOW}Pushing to origin...{NC}")
-    run_command(["git", "push", "origin", current_branch])
-    run_command(["git", "push", "origin", tag])
-
-    print(f"{GREEN}Successfully released version {new_version}{NC}")
-    print()
-    print("Next steps:")
-    print("  1. Create release notes on GitHub")
-    print("  2. Publish to PyPI: uv build && uv publish")
+    tag_and_push(new_version, current_branch)
 
 
 if __name__ == "__main__":
