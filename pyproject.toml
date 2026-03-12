@@ -1,7 +1,7 @@
 [project]
 name = "django-dolt"
 dynamic = ["version"]
-description = "Django integration for Dolt version-controlled databases"
+description = "Django integration for Dolt version-controlled databases, with multi-database support"
 readme = "README.md"
 requires-python = ">=3.12"
 license = {text = "MIT"}
@@ -38,6 +38,7 @@ dependencies = [
 Homepage = "https://github.com/myers/django-dolt"
 Repository = "https://github.com/myers/django-dolt"
 Issues = "https://github.com/myers/django-dolt/issues"
+Changelog = "https://github.com/myers/django-dolt/releases"
 
 [build-system]
 requires = ["hatchling"]
