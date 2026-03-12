@@ -6,7 +6,6 @@ from unittest.mock import MagicMock, patch
 import pytest
 from django.db import connections
 
-from django_dolt.tests import quote_id
 from django_dolt.admin import (
     DoltMultiDBAdminMixin,
     _branch_extensions,
@@ -25,6 +24,7 @@ from django_dolt.services import (
     dolt_log,
     dolt_status,
 )
+from django_dolt.tests import quote_id
 
 
 class TestDoltDatabaseDiscovery:

@@ -155,7 +155,7 @@ class TestDoltSyncCommand:
     def test_sync_commit_returns_none_after_staging(
         self, mock_services: MagicMock
     ) -> None:
-        """When add_and_commit returns None despite status showing changes, exits early."""
+        """add_and_commit returns None despite status showing changes."""
         mock_services.dolt_status.return_value = [
             {"table_name": "t", "staged": 0, "status": "modified"},
         ]
