@@ -19,7 +19,7 @@ jobs:
         ports:
           - 3306:3306
         options: >-
-          --health-cmd "mysqladmin ping -h localhost -u root -pdolt"
+          --health-cmd "dolt sql -q 'SELECT 1'"
           --health-interval 5s
           --health-timeout 5s
           --health-retries 10
