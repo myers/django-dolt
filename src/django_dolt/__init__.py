@@ -27,7 +27,7 @@ from django_dolt.services import (
     get_ignored_tables,
 )
 
-__version__ = "1.0.0"
+__version__ = "1.1.0"
 __all__ = [
     # Models (lazy-loaded to avoid AppRegistryNotReady)
     "Branch",
